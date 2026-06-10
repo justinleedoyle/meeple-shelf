@@ -9,7 +9,10 @@
     "seed": "node seed.js",
     "import-sheet": "node import-sheet.js",
     "enrich": "node enrich-images.js",
-    "export": "node export-static.js"
+    "snapshot": "node export-snapshot.js",
+    "build-page": "node build-page.js",
+    "export": "node export-snapshot.js && node build-page.js",
+    "sync": "node export-snapshot.js && git add data/shelf-snapshot.json && (git diff --quiet HEAD -- data/shelf-snapshot.json || git commit -m \"Update shelf data\" -- data/shelf-snapshot.json) && git push"
   },
   "engines": {
     "node": ">=18"

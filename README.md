@@ -61,19 +61,27 @@ so the combined view shows one card with both owners rather than duplicates.
   registered access, so the app deliberately has no external API dependency.)
 - `PORT` env var to change the port (auto-increments if busy), `DB_PATH` to relocate the DB.
 
-## The GitHub Pages snapshot
+## The GitHub Pages snapshot (auto-published)
 
-GitHub can't run the Node server (Pages is static-only), but `npm run export` renders the
-combined library to `docs/index.html` as a self-contained read-only page — search, player
-count / time / category / owner filters, and the who-has-what matrix all work. Pages serves
-it from `/docs` on `main`, so updating the public page is:
-
-```bash
-npm run export
-git add docs && git commit -m "Refresh shelf snapshot" && git push
-```
+GitHub can't run the Node server (Pages is static-only), but the combined library is
+published as a self-contained read-only page — search, player count / time / category /
+owner filters, and the who-has-what matrix all work.
 
 Live page: https://justinleedoyle.github.io/meeple-shelf/
+
+**Publishing is automated.** After adding games locally, run:
+
+```bash
+npm run sync
+```
+
+That exports `data/shelf-snapshot.json` (crew name, members, games + owners — nothing
+sensitive), commits it, and pushes. A GitHub Action
+([publish-pages.yml](.github/workflows/publish-pages.yml)) then rebuilds the page from the
+snapshot and deploys it to Pages, usually in under a minute. Pushing template/CSS changes
+redeploys too — the page can't go stale.
+
+Locally, `npm run export` builds the same page to `site/index.html` (gitignored) for preview.
 
 To re-import a fresh copy of the Google Sheet, update `data/collection-sheet.md` and rerun
 `npm run import-sheet` (it's idempotent — existing entries are kept, new ✓s become entries).

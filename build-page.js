@@ -1,69 +1,22 @@
-// Exports a self-contained, read-only snapshot of the biggest crew's combined
-// library to docs/index.html — suitable for GitHub Pages:
+// Builds the public read-only page from data/shelf-snapshot.json + public/styles.css
+// into site/index.html. Pure Node, zero dependencies, no database — safe to run in
+// CI (.github/workflows/publish-pages.yml deploys site/ to GitHub Pages on push).
 //
-//   npm run export        # then commit & push; Pages serves /docs
-//
-// The page has no backend: it's the combined library with search and filters
-// (players / time / category / owner), grid + "who has what" matrix views.
+//   npm run build-page   # or: npm run export (snapshot + build together)
 
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const crew = db
-  .prepare(
-    `SELECT c.*, (SELECT COUNT(*) FROM crew_members cm WHERE cm.crew_id = c.id) AS member_count
-     FROM crews c ORDER BY member_count DESC, c.id LIMIT 1`
-  )
-  .get();
-if (!crew) {
-  console.error('No crew found — run `npm run import-sheet` or `npm run seed` first.');
+let data;
+try {
+  data = JSON.parse(readFileSync(path.join(__dirname, 'data', 'shelf-snapshot.json'), 'utf8'));
+} catch {
+  console.error('data/shelf-snapshot.json not found — run `npm run snapshot` first.');
   process.exit(1);
 }
-
-const members = db
-  .prepare(
-    `SELECT u.id, u.display_name AS displayName,
-      (SELECT COUNT(*) FROM library_entries le WHERE le.user_id = u.id) AS gameCount
-     FROM crew_members cm JOIN users u ON u.id = cm.user_id
-     WHERE cm.crew_id = ? ORDER BY cm.joined_at, u.id`
-  )
-  .all(crew.id);
-
-const rows = db
-  .prepare(
-    `SELECT g.id, g.title, g.year, g.min_players AS minPlayers, g.max_players AS maxPlayers,
-            g.play_time AS playTime, g.category, g.image_url AS imageUrl,
-            u.id AS ownerId, u.display_name AS ownerName
-     FROM crew_members cm
-     JOIN library_entries le ON le.user_id = cm.user_id
-     JOIN games g ON g.id = le.game_id
-     JOIN users u ON u.id = cm.user_id
-     WHERE cm.crew_id = ?
-     ORDER BY g.title COLLATE NOCASE, u.display_name`
-  )
-  .all(crew.id);
-
-const byGame = new Map();
-for (const r of rows) {
-  if (!byGame.has(r.id)) {
-    byGame.set(r.id, {
-      title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers,
-      playTime: r.playTime, category: r.category, imageUrl: r.imageUrl, owners: [],
-    });
-  }
-  byGame.get(r.id).owners.push({ id: r.ownerId, displayName: r.ownerName });
-}
-
-const data = {
-  crewName: crew.name,
-  generated: new Date().toISOString().slice(0, 10),
-  members,
-  games: [...byGame.values()],
-};
 
 const css = readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8');
 const dataJson = JSON.stringify(data).replace(/</g, '\\u003c');
@@ -234,8 +187,7 @@ document.querySelector('.segmented').addEventListener('click', (e) => {
 </html>
 `;
 
-const docsDir = path.join(__dirname, 'docs');
-mkdirSync(docsDir, { recursive: true });
-writeFileSync(path.join(docsDir, 'index.html'), html);
-writeFileSync(path.join(docsDir, '.nojekyll'), '');
-console.log(`Exported "${data.crewName}" — ${data.games.length} games, ${members.length} members → docs/index.html`);
+const siteDir = path.join(__dirname, 'site');
+mkdirSync(siteDir, { recursive: true });
+writeFileSync(path.join(siteDir, 'index.html'), html);
+console.log(`Built "${data.crewName}" — ${data.games.length} games (data from ${data.generated}) → site/index.html`);
