@@ -198,8 +198,9 @@ function renderNav(active) {
       <a class="nav-link ${active === 'crews' || active === 'crew' ? 'active' : ''}" href="#/crews">Crews</a>
     </div>
     <span class="nav-spacer"></span>
-    <span class="nav-user">Hi, ${esc(state.user.displayName)}</span>
+    <button class="nav-user" id="account-btn" title="Account settings">Hi, ${esc(state.user.displayName)} ▾</button>
     <button class="btn btn-ghost btn-sm" id="logout-btn">Log out</button>`;
+  $('#account-btn').onclick = openAccountModal;
   $('#logout-btn').onclick = async () => {
     await api('/logout', { method: 'POST' });
     state.user = null;
@@ -228,6 +229,34 @@ async function route() {
     }
     appEl.innerHTML = `<div class="container">${emptyState(e.status === 403 || e.status === 404 ? '🚪' : '⚠️', e.status === 404 ? 'Not found' : 'Hmm', esc(e.message), `<a class="btn" href="#/library">Back to my shelf</a>`)}</div>`;
   }
+}
+
+function openAccountModal() {
+  openModal(`
+    <div class="modal-head"><h2>Account</h2><button class="modal-close">×</button></div>
+    <div class="modal-body">
+      <div style="color:var(--muted);font-size:14px">Signed in as <strong style="color:var(--text)">${esc(state.user.displayName)}</strong> (@${esc(state.user.username)})</div>
+      <h3 style="font-size:15px;margin-top:18px">Change password</h3>
+      <label>Current password</label>
+      <input type="password" id="p-current" autocomplete="current-password">
+      <label>New password</label>
+      <input type="password" id="p-new" autocomplete="new-password" placeholder="At least 6 characters">
+      <div class="form-error" id="p-error"></div>
+      <button class="btn btn-primary" id="p-save" style="margin-top:14px">Update password</button>
+    </div>`);
+  $('#p-save').onclick = async () => {
+    $('#p-error').textContent = '';
+    try {
+      await api('/me/password', {
+        method: 'POST',
+        body: { currentPassword: $('#p-current').value, newPassword: $('#p-new').value },
+      });
+      toast('Password updated — other devices were signed out');
+      closeModal();
+    } catch (err) {
+      $('#p-error').textContent = err.message;
+    }
+  };
 }
 
 // ===================== welcome / auth =====================

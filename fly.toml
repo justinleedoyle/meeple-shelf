@@ -1,0 +1,37 @@
+# Fly.io config for Meeple Shelf.
+#
+# One-time setup (after `fly auth login`):
+#   fly launch --no-deploy --copy-config    # creates the app (rename if taken)
+#   fly volumes create data --size 1 --region den
+#   fly deploy
+#   fly ssh console -C "node /app/import-sheet.js"   # load the collection (or seed)
+#
+# The SQLite database lives on the persistent volume at /data — it survives
+# deploys and restarts. auto-stop keeps the machine (and the bill) near zero
+# when nobody's using it; it wakes in about a second on the next request.
+
+app = "meeple-shelf"
+primary_region = "den"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  DB_PATH = "/data/meeple-shelf.db"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

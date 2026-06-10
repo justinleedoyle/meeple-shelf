@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   db,
   verifyPassword,
+  hashPassword,
   newSessionToken,
   createUser,
   createCrew,
@@ -26,7 +27,10 @@ try {
   /* dataset not present */
 }
 
+const PROD = process.env.NODE_ENV === 'production';
+
 const app = express();
+if (PROD) app.set('trust proxy', 1);
 app.use(express.json({ limit: '100kb' }));
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
@@ -55,7 +59,22 @@ function currentUser(req) {
 function startSession(res, userId) {
   const token = newSessionToken();
   db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);
-  res.append('Set-Cookie', `session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=31536000`);
+  res.append('Set-Cookie', `session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=31536000${PROD ? '; Secure' : ''}`);
+}
+
+// Tiny in-memory rate limit for credential endpoints (per IP, 10 tries / 15 min).
+const attempts = new Map();
+function rateLimitAuth(req, res, next) {
+  const key = req.ip || 'unknown';
+  const now = Date.now();
+  const slot = attempts.get(key);
+  if (!slot || now > slot.resetAt) {
+    attempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return next();
+  }
+  if (slot.count >= 10) return res.status(429).json({ error: 'Too many attempts — try again in a few minutes' });
+  slot.count++;
+  next();
 }
 
 function requireAuth(req, res, next) {
@@ -94,7 +113,7 @@ function validateGameInput(body) {
 
 // ---------- auth routes ----------
 
-app.post('/api/signup', (req, res) => {
+app.post('/api/signup', rateLimitAuth, (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
   const displayName = String(req.body.displayName || '').trim().slice(0, 30) || username;
@@ -116,7 +135,7 @@ app.post('/api/signup', (req, res) => {
   }
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', rateLimitAuth, (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
@@ -137,6 +156,22 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/me', (req, res) => {
   const user = currentUser(req);
   res.json({ user: user ? userToJson(user) : null });
+});
+
+app.post('/api/me/password', requireAuth, (req, res) => {
+  const current = String(req.body.currentPassword || '');
+  const next = String(req.body.newPassword || '');
+  if (!verifyPassword(current, req.user.password_hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+  if (next.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  }
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), req.user.id);
+  // log out every other device, keep this session
+  const token = parseCookies(req).session;
+  db.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').run(req.user.id, token);
+  res.json({ ok: true });
 });
 
 app.patch('/api/me/sharing', requireAuth, (req, res) => {

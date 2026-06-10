@@ -1,0 +1,14 @@
+node_modules
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+site
+docs
+.git
+.github
+.claude
+.DS_Store
+Dockerfile
+fly.toml
+README.md
