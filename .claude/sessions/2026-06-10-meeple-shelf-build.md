@@ -61,6 +61,21 @@ combined "crew" libraries with friends (who has what).
 - All 10 new-endpoint tests passed on a throwaway DB; UI add/owners-edit
   cycle verified and reverted (real data still matches the sheet exactly).
 
+## Phase 4 (same day): CI auto-publish + BGG API research
+- Pages switched from legacy /docs to **workflow build type**. New pipeline:
+  `npm run sync` → export-snapshot.js writes data/shelf-snapshot.json (public-safe,
+  committed) → push → .github/workflows/publish-pages.yml builds site/index.html
+  via dependency-free build-page.js and deploys (~30s). export-static.js and
+  committed docs/ removed; site/ gitignored. DB stays local-only (password hashes).
+- Action versions bumped to Node-24-ready majors (checkout@v6, setup-node@v6,
+  configure-pages@v6, upload-pages-artifact@v5, deploy-pages@v5) — GitHub forces
+  Node 24 on runners June 16, 2026. First run with v4s succeeded but warned.
+- BGG API (researched, confirmed): since July 2, 2025 ALL XML API use requires
+  registration; you apply at boardgamegeek.com/using_the_xml_api (browser, logged
+  in to BGG) and get an app token used as `Authorization: Bearer <token>`.
+  Wiring live lookups deferred until Justin has a token (BGG_API_TOKEN env var
+  planned, fallback to local datasets).
+
 ## In Progress
 Nothing — feature-complete as scoped.
 
