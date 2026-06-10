@@ -94,6 +94,21 @@ combined "crew" libraries with friends (who has what).
 - BGG application form (boardgamegeek.com/applications/create): field-by-field
   answers drafted for Justin (non-commercial, public app, tiny volume).
 
+## Phase 6 (same day): hosting prep (Fly.io) — AWAITING JUSTIN
+- Built & tested: POST /api/me/password (validates current, kills other sessions),
+  Account modal via "Hi, <name> ▾" nav button, login/signup rate limit (10/15min/IP),
+  Secure cookies + trust proxy in production. 7/7 curl tests passed.
+- Deploy config committed: Dockerfile (node:22-slim, npm ci --omit=dev — better-sqlite3
+  uses linux-x64 prebuilds), fly.toml (app "meeple-shelf" — rename if name taken;
+  region den; volume "data" → /data; DB_PATH=/data/meeple-shelf.db; auto-stop,
+  min_machines_running=0, 512MB shared-cpu-1x). .dockerignore excludes local DB.
+- BGG API application SUBMITTED by Justin (awaiting token → then wire live lookups
+  behind BGG_API_TOKEN).
+- NEXT SESSION: Justin does fly.io signup + `brew install flyctl` + `fly auth login`,
+  then: fly launch --no-deploy --copy-config → fly volumes create data --size 1
+  --region den → fly deploy → fly ssh console -C "node /app/import-sheet.js" →
+  verify → households change passwords → consider retiring/keeping Pages snapshot.
+
 ## In Progress
 Nothing — feature-complete as scoped.
 
