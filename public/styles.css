@@ -538,6 +538,23 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 .owner-row select.loc { width: auto; max-width: 46%; font-size: 13px; padding: 6px 8px; }
 .owner-row select.loc:disabled { opacity: 0.35; }
 
+/* packed toggle (static/offline page) */
+.pack-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(24, 20, 18, 0.82);
+  border: 1px solid var(--line);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pack-btn.on { background: var(--accent); border-color: var(--accent); }
+
 /* surprise banner (game night picker) */
 .surprise-banner {
   display: flex;

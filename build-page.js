@@ -78,7 +78,15 @@ function groupExpansions(list) {
   return { top, exps };
 }
 
-const state = { q: '', players: 'any', time: 'any', owner: 'all', category: 'all', view: 'grid', expanded: new Set() };
+const state = { q: '', players: 'any', time: 'any', owner: 'all', category: 'all', view: 'grid', expanded: new Set(), packedOnly: false };
+// "Packed" = games physically along for a trip/game night. Stored on this device
+// (localStorage) so it works fully offline — perfect for campsites.
+const packed = new Set(JSON.parse(localStorage.getItem('meeple-packed') || '[]'));
+function savePacked() {
+  localStorage.setItem('meeple-packed', JSON.stringify([...packed]));
+  const n = document.getElementById('packed-n');
+  if (n) n.textContent = packed.size;
+}
 const categories = [...new Set(DATA.games.map((g) => g.category).filter(Boolean))].sort();
 const multiOwned = DATA.games.filter((g) => g.owners.length > 1).length;
 const titleById = new Map(DATA.games.map((g) => [g.id, g.title]));
@@ -109,6 +117,7 @@ document.getElementById('app').innerHTML = \`
     </div>
     \${categories.length ? \`<div class="filter-group"><span class="glabel">Category</span><select id="f-category"><option value="all">All</option>\${categories.map((c) => \`<option value="\${esc(c)}">\${esc(c)}</option>\`).join('')}</select></div>\` : ''}
     <span class="nav-spacer"></span>
+    <button class="chip-btn" id="f-packed" title="Show only games marked as packed">🎒 Packed (<span id="packed-n">0</span>)</button>
     <button class="btn" id="surprise-btn">🎲 Surprise me</button>
     <div class="segmented">
       <button data-view="grid" class="active">Grid</button>
@@ -145,6 +154,7 @@ function filtered() {
   }
   if (state.owner !== 'all') list = list.filter((g) => g.owners.some((o) => String(o.id) === String(state.owner)));
   if (state.category !== 'all') list = list.filter((g) => g.category === state.category);
+  if (state.packedOnly) list = list.filter((g) => packed.has(g.id));
   list.sort((a, b) => a.title.localeCompare(b.title));
   return list;
 }
@@ -157,6 +167,7 @@ function card(g, expansions, expanded) {
       <span class="cover-letter">\${esc(g.title[0].toUpperCase())}</span><span class="cover-die">🎲</span>
       \${g.imageUrl ? \`<img loading="lazy" src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : ''}
     </div>
+    <button class="pack-btn\${packed.has(g.id) ? ' on' : ''}" data-pack="\${g.id}" title="Toggle packed">🎒</button>
     <div class="card-body">
       <div class="card-title">\${esc(g.title)}\${g.year ? \` <span style="color:var(--faint);font-weight:400">(\${g.year})</span>\` : ''}</div>
       <div class="card-meta">\${players ? \`<span class="badge">\${players}</span>\` : ''}\${time ? \`<span class="badge">\${time}</span>\` : ''}\${g.category ? \`<span class="badge">\${esc(g.category)}</span>\` : ''}</div>
@@ -221,12 +232,26 @@ document.querySelector('.segmented').addEventListener('click', (e) => {
   render();
 });
 document.getElementById('games').addEventListener('click', (e) => {
+  const pack = e.target.closest('[data-pack]');
+  if (pack) {
+    const id = Number(pack.dataset.pack);
+    packed.has(id) ? packed.delete(id) : packed.add(id);
+    savePacked();
+    render();
+    return;
+  }
   const tog = e.target.closest('[data-toggle]');
   if (!tog) return;
   const id = Number(tog.dataset.toggle);
   state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
   render();
 });
+document.getElementById('f-packed').onclick = () => {
+  state.packedOnly = !state.packedOnly;
+  document.getElementById('f-packed').classList.toggle('active', state.packedOnly);
+  render();
+};
+savePacked();
 
 // ---- game night picker: current filters + dice ----
 function surpriseHtml(g, final) {
