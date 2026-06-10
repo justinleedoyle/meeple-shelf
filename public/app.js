@@ -429,6 +429,7 @@ async function openAddModal(ownersCtx = null) {
     <div class="modal-body">
       <div class="tabs">
         <button class="tab active" data-tab="search">Search</button>
+        <button class="tab" data-tab="bulk">Bulk add</button>
         <button class="tab" data-tab="manual">Manual entry</button>
       </div>
       ${showOwners ? `<div class="owner-pick" id="owner-pick">
@@ -439,6 +440,13 @@ async function openAddModal(ownersCtx = null) {
         <input type="text" id="game-q" placeholder="Start typing a game name…" autocomplete="off">
         <div class="search-results" id="game-results"></div>
         <div class="search-hint">Searches a built-in catalog of popular games plus everything already added by people on this server. Missing something? Use Manual entry.</div>
+      </div>
+      <div id="tab-bulk" style="display:none">
+        <label>One game per line</label>
+        <textarea id="bulk-input" rows="7" placeholder="Wingspan&#10;Catan&#10;Azul: Summer Pavilion&#10;…"></textarea>
+        <button class="btn" id="bulk-match" style="margin-top:10px">Match titles</button>
+        <div class="search-results" id="bulk-results"></div>
+        <button class="btn btn-primary" id="bulk-add" style="margin-top:10px;display:none">Add selected</button>
       </div>
       <div id="tab-manual" style="display:none">
         <label>Title *</label><input type="text" id="m-title">
@@ -462,10 +470,76 @@ async function openAddModal(ownersCtx = null) {
   for (const tab of modalRoot.querySelectorAll('.tab')) {
     tab.onclick = () => {
       modalRoot.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-      $('#tab-search').style.display = tab.dataset.tab === 'search' ? '' : 'none';
-      $('#tab-manual').style.display = tab.dataset.tab === 'manual' ? '' : 'none';
+      for (const name of ['search', 'bulk', 'manual']) {
+        $('#tab-' + name).style.display = tab.dataset.tab === name ? '' : 'none';
+      }
     };
   }
+
+  // ---- bulk add: paste titles, match each against search, add the lot ----
+  let bulkRows = [];
+  function renderBulk() {
+    $('#bulk-results').innerHTML = bulkRows.map((row, i) => `
+      <div class="result-row ${row.checked ? '' : 'added'}">
+        ${row.match?.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(row.match.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+        <div class="r-grow">
+          <div class="r-title">${esc(row.match ? row.match.title : row.line)}${row.match?.year ? `<span class="r-year">(${row.match.year})</span>` : ''}</div>
+          <div class="r-meta">${row.match ? ([fmtPlayers(row.match), fmtTime(row.match)].filter(Boolean).join(' · ') || 'matched') : 'no match — will be added with this title as-is'}</div>
+        </div>
+        <input type="checkbox" data-bulk="${i}" ${row.checked ? 'checked' : ''} style="width:17px;height:17px;accent-color:var(--accent)">
+      </div>`).join('');
+  }
+  $('#bulk-results').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-bulk]');
+    if (!cb) return;
+    bulkRows[Number(cb.dataset.bulk)].checked = cb.checked;
+    renderBulk();
+  });
+  $('#bulk-match').onclick = async () => {
+    const lines = [...new Set($('#bulk-input').value.split('\n').map((s) => s.trim()).filter((s) => s.length >= 2))].slice(0, 100);
+    if (!lines.length) return;
+    const btn = $('#bulk-match');
+    btn.disabled = true;
+    bulkRows = [];
+    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    for (const [i, line] of lines.entries()) {
+      btn.textContent = `Matching… ${i + 1}/${lines.length}`;
+      let match = null;
+      try {
+        const { results } = await api('/games/search?q=' + encodeURIComponent(line));
+        match = results.find((r) => norm(r.title) === norm(line)) || results[0] || null;
+      } catch { /* leave unmatched */ }
+      bulkRows.push({ line, match, checked: true });
+      renderBulk();
+    }
+    btn.disabled = false;
+    btn.textContent = 'Match titles';
+    $('#bulk-add').style.display = '';
+  };
+  $('#bulk-add').onclick = async () => {
+    const rows = bulkRows.filter((r) => r.checked);
+    if (!rows.length) return;
+    const btn = $('#bulk-add');
+    btn.disabled = true;
+    let ok = 0, dup = 0, done = 0;
+    for (const row of rows) {
+      btn.textContent = `Adding… ${++done}/${rows.length}`;
+      try {
+        const ownerIds = [...selectedOwners];
+        const m = row.match;
+        const body = m?.gameId
+          ? { gameId: m.gameId, ownerIds }
+          : m
+            ? { title: m.title, year: m.year, minPlayers: m.minPlayers, maxPlayers: m.maxPlayers, playTime: m.playTime, category: m.category, imageUrl: m.imageUrl, ownerIds }
+            : { title: row.line, ownerIds };
+        const { added } = await api('/library', { method: 'POST', body });
+        added ? ok++ : dup++;
+      } catch { /* keep going */ }
+    }
+    modalDirty = true;
+    toast(`Added ${ok} game${ok === 1 ? '' : 's'}${dup ? ` · ${dup} already on the shelf` : ''}`);
+    closeModal();
+  };
 
   if (showOwners) {
     $('#owner-pick').addEventListener('click', (e) => {
