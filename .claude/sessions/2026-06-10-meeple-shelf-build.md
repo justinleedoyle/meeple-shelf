@@ -140,3 +140,9 @@ Nothing — feature-complete as scoped.
 - Public page: https://justinleedoyle.github.io/meeple-shelf/
 - Workspace-level `/Users/justin/Projects/.claude/launch.json` has two preview configs:
   the app (port 3000) and the static snapshot (python http.server, port 8123).
+
+## Phase 8 (same day): trip-ready offline packed list
+- 🎒 packed toggle per card on the STATIC page (localStorage, offline-first),
+  "Packed (n)" filter chip, Surprise me rolls from packed pool. Verified offline
+  cache (SW active, page in caches). Live on Pages. Built for Justin's camping
+  trip — live app needs signal; snapshot page is the campsite tool.
