@@ -16,6 +16,16 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const catalog = JSON.parse(readFileSync(path.join(__dirname, 'data', 'popular-games.json'), 'utf8'));
 
+// Optional big catalog built from BGG's ranked-games dataset (~30k titles with
+// year + cover thumbnail). See build-bgg-catalog.js. Search works without it.
+let bggCatalog = [];
+try {
+  bggCatalog = JSON.parse(readFileSync(path.join(__dirname, 'data', 'bgg-catalog.json'), 'utf8'))
+    .map((g) => ({ title: g.t, tl: g.t.toLowerCase(), year: g.y, rank: g.r ?? 1e9, imageUrl: g.im }));
+} catch {
+  /* dataset not present */
+}
+
 const app = express();
 app.use(express.json({ limit: '100kb' }));
 app.use((req, res, next) => {
@@ -135,7 +145,30 @@ app.patch('/api/me/sharing', requireAuth, (req, res) => {
   res.json({ user: userToJson({ ...req.user, library_public: isPublic }) });
 });
 
-// ---------- game search (built-in catalog + games already in this community) ----------
+// ---------- crewmates (people you share a crew with — used for "add to whose shelf") ----------
+
+function crewmateIds(userId) {
+  return db
+    .prepare(
+      `SELECT DISTINCT cm2.user_id AS id FROM crew_members cm1
+       JOIN crew_members cm2 ON cm2.crew_id = cm1.crew_id WHERE cm1.user_id = ?`
+    )
+    .all(userId)
+    .map((r) => r.id);
+}
+
+app.get('/api/crewmates', requireAuth, (req, res) => {
+  const ids = new Set(crewmateIds(req.user.id));
+  ids.add(req.user.id);
+  const rows = db
+    .prepare(`SELECT id, display_name FROM users WHERE id IN (${[...ids].map(() => '?').join(',')}) ORDER BY display_name`)
+    .all(...ids);
+  res.json({
+    crewmates: rows.map((u) => ({ id: u.id, displayName: u.display_name, isMe: u.id === req.user.id })),
+  });
+});
+
+// ---------- game search (community games + curated catalog + BGG dataset) ----------
 
 app.get('/api/games/search', requireAuth, (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
@@ -149,14 +182,27 @@ app.get('/api/games/search', requireAuth, (req, res) => {
 
   const fromCatalog = catalog
     .filter((g) => g.title.toLowerCase().includes(q))
-    .slice(0, 12)
+    .slice(0, 15)
     .map((g) => ({ source: 'catalog', ...g }));
 
-  // Dedupe by title; prefer community rows since they may already carry cover art.
+  const fromBgg = bggCatalog
+    .filter((g) => g.tl.includes(q))
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 15)
+    .map((g) => ({ source: 'bgg', title: g.title, year: g.year, imageUrl: g.imageUrl }));
+
+  // Merge by title+year. Community first (has a gameId), then the curated catalog
+  // (has player counts / play time), then BGG (has cover art) — later sources fill
+  // in whatever fields the kept row is missing.
   const seen = new Map();
-  for (const r of [...fromDb, ...fromCatalog]) {
-    const key = r.title.toLowerCase();
-    if (!seen.has(key)) seen.set(key, r);
+  for (const r of [...fromDb, ...fromCatalog, ...fromBgg]) {
+    const key = `${r.title.toLowerCase()}|${r.year ?? ''}`;
+    const ex = seen.get(key);
+    if (!ex) {
+      seen.set(key, { ...r });
+      continue;
+    }
+    for (const f of ['minPlayers', 'maxPlayers', 'playTime', 'category', 'imageUrl']) ex[f] = ex[f] ?? r[f];
   }
   const results = [...seen.values()].sort(
     (a, b) =>
@@ -194,21 +240,26 @@ app.post('/api/library', requireAuth, (req, res) => {
     if (!input) return res.status(400).json({ error: 'A game needs at least a title' });
     game = findOrCreateGame(input);
   }
-  const notes = String(req.body.notes || '').slice(0, 500);
-  try {
-    const info = db
-      .prepare('INSERT INTO library_entries (user_id, game_id, notes) VALUES (?, ?, ?)')
-      .run(req.user.id, game.id, notes);
-    const entry = db
-      .prepare('SELECT id, notes, added_at FROM library_entries WHERE id = ?')
-      .get(info.lastInsertRowid);
-    res.status(201).json({ entry: { id: entry.id, notes: entry.notes, addedAt: entry.added_at, game: gameToJson(game) } });
-  } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
-      return res.status(409).json({ error: `${game.title} is already on your shelf` });
-    }
-    throw e;
+  // Add for yourself by default, or for any crewmates ("ownerIds") — handy when
+  // one person maintains the whole group's collection.
+  let ownerIds = Array.isArray(req.body.ownerIds)
+    ? [...new Set(req.body.ownerIds.map(Number).filter(Number.isInteger))]
+    : [req.user.id];
+  if (!ownerIds.length) ownerIds = [req.user.id];
+  const allowed = new Set(crewmateIds(req.user.id));
+  allowed.add(req.user.id);
+  if (ownerIds.some((id) => !allowed.has(id))) {
+    return res.status(403).json({ error: 'You can only add games for yourself or members of your crews' });
   }
+
+  const notes = String(req.body.notes || '').slice(0, 500);
+  let added = 0;
+  for (const uid of ownerIds) {
+    added += db
+      .prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id, notes) VALUES (?, ?, ?)')
+      .run(uid, game.id, notes).changes;
+  }
+  res.status(201).json({ game: gameToJson(game), added, requested: ownerIds.length });
 });
 
 app.patch('/api/library/:id', requireAuth, (req, res) => {
@@ -223,6 +274,17 @@ app.patch('/api/library/:id', requireAuth, (req, res) => {
     let imageUrl = String(req.body.imageUrl || '').trim().slice(0, 500);
     if (imageUrl && !/^https?:\/\//i.test(imageUrl)) imageUrl = '';
     db.prepare('UPDATE games SET image_url = ? WHERE id = ?').run(imageUrl || null, entry.game_id);
+  }
+  // Game details are shared across everyone who owns the game; any owner can fix them.
+  const stats = {};
+  if (req.body.year !== undefined) stats.year = intOrNull(req.body.year, 1, 3000);
+  if (req.body.minPlayers !== undefined) stats.min_players = intOrNull(req.body.minPlayers, 1, 999);
+  if (req.body.maxPlayers !== undefined) stats.max_players = intOrNull(req.body.maxPlayers, 1, 999);
+  if (req.body.playTime !== undefined) stats.play_time = intOrNull(req.body.playTime, 1, 6000);
+  if (req.body.category !== undefined) stats.category = String(req.body.category || '').trim().slice(0, 60) || null;
+  if (Object.keys(stats).length) {
+    db.prepare(`UPDATE games SET ${Object.keys(stats).map((k) => k + ' = ?').join(', ')} WHERE id = ?`)
+      .run(...Object.values(stats), entry.game_id);
   }
   const updated = db
     .prepare(
@@ -337,6 +399,46 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
     members,
     games: [...byGame.values()],
   });
+});
+
+// Set exactly which crew members own a game — the "fix the matrix" endpoint.
+// Only touches entries of this crew's members; other owners are unaffected.
+app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
+  const crew = db.prepare('SELECT * FROM crews WHERE id = ?').get(req.params.id);
+  if (!crew) return res.status(404).json({ error: 'Crew not found' });
+  const isMember = db
+    .prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?')
+    .get(crew.id, req.user.id);
+  if (!isMember) return res.status(403).json({ error: 'You are not a member of this crew' });
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.gameId);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const memberIds = db
+    .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
+    .all(crew.id)
+    .map((r) => r.user_id);
+  const want = new Set(Array.isArray(req.body.userIds) ? req.body.userIds.map(Number) : []);
+  for (const id of want) {
+    if (!memberIds.includes(id)) return res.status(400).json({ error: 'All owners must be members of this crew' });
+  }
+
+  db.transaction(() => {
+    for (const uid of memberIds) {
+      if (want.has(uid)) {
+        db.prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id) VALUES (?, ?)').run(uid, game.id);
+      } else {
+        db.prepare('DELETE FROM library_entries WHERE user_id = ? AND game_id = ?').run(uid, game.id);
+      }
+    }
+  })();
+
+  const owners = db
+    .prepare(
+      `SELECT u.id, u.display_name FROM library_entries le JOIN users u ON u.id = le.user_id
+       WHERE le.game_id = ? AND le.user_id IN (${memberIds.map(() => '?').join(',')}) ORDER BY u.display_name`
+    )
+    .all(game.id, ...memberIds);
+  res.json({ owners: owners.map((o) => ({ id: o.id, displayName: o.display_name })) });
 });
 
 app.post('/api/crews/:id/leave', requireAuth, (req, res) => {

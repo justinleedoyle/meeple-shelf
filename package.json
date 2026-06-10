@@ -8,6 +8,7 @@
     "start": "node server.js",
     "seed": "node seed.js",
     "import-sheet": "node import-sheet.js",
+    "enrich": "node enrich-images.js",
     "export": "node export-static.js"
   },
   "engines": {

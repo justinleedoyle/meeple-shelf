@@ -285,6 +285,9 @@ select { width: auto; padding: 8px 10px; }
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .card-notes {
   margin-top: 7px;
@@ -488,8 +491,37 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 }
 .tab.active { color: var(--accent-bright); border-bottom-color: var(--accent); }
 
+/* owner picker in add modal */
+.owner-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+/* owners modal rows */
+.owner-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.owner-row:hover { background: var(--card); }
+.owner-row input { width: 17px; height: 17px; accent-color: var(--accent); }
+.owner-row .m-name { font-weight: 700; font-size: 14px; }
+
 /* search results in add modal */
 .search-results { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; max-height: 330px; overflow-y: auto; }
+.r-thumb { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex: none; background: var(--bg); }
 .result-row {
   display: flex;
   align-items: center;
@@ -569,10 +601,44 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
+/* ---------- mobile ---------- */
 @media (max-width: 640px) {
   .two-col { grid-template-columns: 1fr; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .page-head h1 { font-size: 22px; }
+  .page-head { gap: 10px; }
   nav { padding: 10px 14px; gap: 10px; }
   .nav-user { display: none; }
+  .container { padding: 18px 14px 70px; }
+
+  /* 16px stops iOS Safari from auto-zooming focused inputs */
+  input[type="text"], input[type="password"], input[type="number"], input[type="url"], select, textarea { font-size: 16px; }
+
+  /* comfortable touch targets */
+  .btn { padding: 10px 16px; }
+  .btn-sm { padding: 7px 12px; }
+  .chip-btn { padding: 7px 13px; }
+  .icon-btn { width: 34px; height: 34px; }
+
+  .filter-bar { gap: 8px; }
+  .filter-bar .search { max-width: none; flex-basis: 100%; }
+  .segmented { display: flex; width: 100%; }
+  .segmented button { flex: 1; padding: 9px; }
+
+  .share-bar { gap: 8px; }
+  .share-link { max-width: 100%; flex-basis: 100%; order: 5; }
+
+  .members-row { gap: 7px; }
+  .member { padding: 4px 11px 4px 5px; }
+  .matrix th, .matrix td { padding: 8px 10px; font-size: 13px; }
+  .big-code { font-size: 26px; letter-spacing: 5px; }
+  .modal-backdrop { padding: 10px 8px; }
+  .modal-body { padding: 12px 14px 16px; }
+  .modal-head { padding: 14px 14px 0; }
+  .cover-letter { font-size: 48px; }
+}
+
+/* touch devices have no hover — keep card actions visible */
+@media (hover: none) {
+  .card-actions { opacity: 1; }
 }

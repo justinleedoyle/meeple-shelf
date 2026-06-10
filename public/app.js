@@ -26,6 +26,10 @@ function hashStr(s) {
 const MEMBER_COLORS = ['#e8a33d', '#7fb069', '#5fa8d3', '#c98bdb', '#e07a5f', '#64b6ac', '#d6c25a', '#9aa0d6'];
 const memberColor = (id) => MEMBER_COLORS[id % MEMBER_COLORS.length];
 
+// Category vocabulary from the shared sheet — offered as autocomplete suggestions.
+const CATEGORY_LIST = ['Abstract Strategy', 'Action / Dexterity', 'Adventure', 'American West', 'Animals', 'Aviation / Flight', 'Bluffing', 'Card Game', "Children's Game", 'City Building', 'Civilization', 'Deduction', 'Dice', 'Economic', 'Educational', 'Environmental', 'Expansion for Base-game', 'Exploration', 'Fantasy', 'Farming', 'Fighting', 'Horror', 'Humor', 'Maze', 'Mature / Adult', 'Medical', 'Medieval', 'Memory', 'Movies / TV / Radio theme', 'Murder / Mystery', 'Music', 'Mythology', 'Nautical', 'Negotiation', 'Novel-based', 'Number', 'Party Game', 'Pirates', 'Political', 'Puzzle', 'Racing', 'Real-time', 'Science Fiction', 'Space Exploration', 'Spies / Secret Agents', 'Sports', 'Territory Building', 'Trains', 'Transportation', 'Travel', 'Trivia', 'Video Game Theme', 'Wargame', 'Word Game'];
+const catDatalist = () => `<datalist id="cat-list">${CATEGORY_LIST.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`;
+
 const COVER_GRADS = [
   ['#5a4632', '#8a6a3f'], ['#3f5a46', '#5f8a62'], ['#374f63', '#5b7d9a'], ['#5d3f5f', '#8a5f8d'],
   ['#5f4032', '#9a6b4f'], ['#32525a', '#4f8a8a'], ['#54324a', '#8a4f6b'], ['#4a4a32', '#7d7d4f'],
@@ -119,20 +123,23 @@ function emptyState(emoji, title, bodyHtml, ctaHtml = '') {
   return `<div class="empty"><div class="e-emoji">${emoji}</div><h2>${title}</h2><p>${bodyHtml}</p>${ctaHtml}</div>`;
 }
 
-function gameCardHtml(game, { entryId, notes, addedAt, owners, actions } = {}) {
+function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners } = {}) {
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   const players = fmtPlayers(game);
   const time = fmtTime(game);
   return `
-  <div class="game-card"${entryId ? ` data-entry="${entryId}"` : ''}>
+  <div class="game-card"${entryId ? ` data-entry="${entryId}"` : ''}${gameId ? ` data-game="${gameId}"` : ''}>
     <div class="cover" style="background:linear-gradient(135deg, ${grad[0]}, ${grad[1]})">
       <span class="cover-letter">${esc((game.title || '?')[0].toUpperCase())}</span>
       <span class="cover-die">🎲</span>
       ${game.imageUrl ? `<img loading="lazy" src="${esc(game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
     </div>
     ${actions ? `<div class="card-actions">
-      <button class="icon-btn" data-act="edit" title="Edit notes & cover">✎</button>
+      <button class="icon-btn" data-act="edit" title="Edit details">✎</button>
       <button class="icon-btn danger" data-act="remove" title="Remove from shelf">✕</button>
+    </div>` : ''}
+    ${editOwners ? `<div class="card-actions">
+      <button class="icon-btn" data-act="owners" title="Edit who owns this">✎</button>
     </div>` : ''}
     <div class="card-body">
       <div class="card-title">${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</div>
@@ -299,6 +306,7 @@ async function viewLibrary() {
   </div>`;
 
   const byId = new Map(entries.map((en) => [String(en.id), en]));
+  const openAdd = () => openAddModal();
 
   function renderGrid() {
     const grid = $('#lib-grid');
@@ -313,9 +321,8 @@ async function viewLibrary() {
   }
   renderGrid();
 
-  const addBtn = $('#add-game-btn') || $('#empty-add-btn');
-  ($('#add-game-btn') || {}).onclick = openAddModal;
-  if ($('#empty-add-btn')) $('#empty-add-btn').onclick = openAddModal;
+  if ($('#add-game-btn')) $('#add-game-btn').onclick = openAdd;
+  if ($('#empty-add-btn')) $('#empty-add-btn').onclick = openAdd;
 
   if ($('#lib-q')) $('#lib-q').oninput = debounce((e) => { libState.q = e.target.value; renderGrid(); }, 150);
   if ($('#lib-sort')) $('#lib-sort').onchange = (e) => { libState.sort = e.target.value; renderGrid(); };
@@ -349,7 +356,20 @@ async function viewLibrary() {
 
 // ---------- add game modal ----------
 
-function openAddModal() {
+async function openAddModal(ownersCtx = null) {
+  // Who can this game be added for? Me plus anyone I share a crew with.
+  if (!ownersCtx) {
+    try {
+      const { crewmates } = await api('/crewmates');
+      crewmates.sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.displayName.localeCompare(b.displayName));
+      ownersCtx = { members: crewmates };
+    } catch {
+      ownersCtx = { members: [] };
+    }
+  }
+  const showOwners = ownersCtx.members.length > 1;
+  const selectedOwners = new Set([state.user.id]);
+
   openModal(`
     <div class="modal-head"><h2>Add a game</h2><button class="modal-close">×</button></div>
     <div class="modal-body">
@@ -357,6 +377,10 @@ function openAddModal() {
         <button class="tab active" data-tab="search">Search</button>
         <button class="tab" data-tab="manual">Manual entry</button>
       </div>
+      ${showOwners ? `<div class="owner-pick" id="owner-pick">
+        <span class="glabel">Whose shelf?</span>
+        ${ownersCtx.members.map((m) => `<button class="chip-btn ${selectedOwners.has(m.id) ? 'active' : ''}" data-owner="${m.id}">${esc(m.displayName)}${m.id === state.user.id ? ' (me)' : ''}</button>`).join('')}
+      </div>` : ''}
       <div id="tab-search">
         <input type="text" id="game-q" placeholder="Start typing a game name…" autocomplete="off">
         <div class="search-results" id="game-results"></div>
@@ -372,7 +396,8 @@ function openAddModal() {
           <div><label>Min players</label><input type="number" id="m-min" placeholder="2"></div>
           <div><label>Max players</label><input type="number" id="m-max" placeholder="4"></div>
         </div>
-        <label>Category <span style="font-weight:400">(optional)</span></label><input type="text" id="m-category" placeholder="e.g. Party Game, Economic…">
+        <label>Category <span style="font-weight:400">(optional)</span></label><input type="text" id="m-category" list="cat-list" placeholder="e.g. Party Game, Economic…">
+        ${catDatalist()}
         <label>Cover image URL <span style="font-weight:400">(optional)</span></label><input type="url" id="m-img" placeholder="https://…">
         <label>Notes <span style="font-weight:400">(optional)</span></label><input type="text" id="m-notes" placeholder="e.g. sleeved, expansion included…">
         <div class="form-error" id="m-error"></div>
@@ -388,6 +413,21 @@ function openAddModal() {
     };
   }
 
+  if (showOwners) {
+    $('#owner-pick').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-owner]');
+      if (!btn) return;
+      const id = Number(btn.dataset.owner);
+      if (selectedOwners.has(id)) {
+        if (selectedOwners.size === 1) return toast('Pick at least one shelf');
+        selectedOwners.delete(id);
+      } else {
+        selectedOwners.add(id);
+      }
+      btn.classList.toggle('active', selectedOwners.has(id));
+    });
+  }
+
   const resultsEl = $('#game-results');
   let lastResults = [];
 
@@ -399,6 +439,7 @@ function openAddModal() {
       resultsEl.innerHTML = results.length
         ? results.map((r, i) => `
           <div class="result-row" data-i="${i}">
+            ${r.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(r.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
               <div class="r-title">${esc(r.title)}${r.year ? `<span class="r-year">(${r.year})</span>` : ''}</div>
               <div class="r-meta">${[fmtPlayers(r), fmtTime(r)].filter(Boolean).join(' · ') || '&nbsp;'}</div>
@@ -421,20 +462,22 @@ function openAddModal() {
     if (!r) return;
     btn.disabled = true;
     try {
-      const body = r.gameId ? { gameId: r.gameId } : { title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers, playTime: r.playTime };
-      await api('/library', { method: 'POST', body });
-      btn.textContent = '✓ Added';
+      const ownerIds = [...selectedOwners];
+      const body = r.gameId
+        ? { gameId: r.gameId, ownerIds }
+        : { title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers, playTime: r.playTime, category: r.category, imageUrl: r.imageUrl, ownerIds };
+      const { game, added, requested } = await api('/library', { method: 'POST', body });
+      btn.textContent = added ? '✓ Added' : 'On shelf';
       btn.closest('.result-row').classList.add('added');
-      modalDirty = true;
-      toast(`${r.title} added to your shelf`);
+      if (added) {
+        modalDirty = true;
+        toast(`${game.title} added to ${added === 1 ? (requested === 1 ? 'the shelf' : '1 shelf') : added + ' shelves'}`);
+      } else {
+        toast(`${game.title} is already on ${requested === 1 ? 'that shelf' : 'those shelves'}`);
+      }
     } catch (err) {
       btn.disabled = false;
       toast(err.message);
-      if (err.status === 409) {
-        btn.textContent = 'On shelf';
-        btn.disabled = true;
-        btn.closest('.result-row').classList.add('added');
-      }
     }
   });
 
@@ -452,9 +495,10 @@ function openAddModal() {
         notes: $('#m-notes').value,
       };
       ['year', 'minPlayers', 'maxPlayers', 'playTime'].forEach((k) => { if (body[k] != null) body[k] = Number(body[k]) || null; });
-      const { entry } = await api('/library', { method: 'POST', body });
+      body.ownerIds = [...selectedOwners];
+      const { game, added } = await api('/library', { method: 'POST', body });
       modalDirty = true;
-      toast(`${entry.game.title} added to your shelf`);
+      toast(added ? `${game.title} added to ${added === 1 ? 'the shelf' : added + ' shelves'}` : `${game.title} was already there`);
       closeModal();
     } catch (err) {
       $('#m-error').textContent = err.message;
@@ -463,19 +507,42 @@ function openAddModal() {
 }
 
 function openEditModal(entry) {
+  const g = entry.game;
   openModal(`
-    <div class="modal-head"><h2>${esc(entry.game.title)}</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>${esc(g.title)}</h2><button class="modal-close">×</button></div>
     <div class="modal-body">
+      <div class="two-col">
+        <div><label>Year</label><input type="number" id="e-year" value="${g.year ?? ''}"></div>
+        <div><label>Play time (min)</label><input type="number" id="e-time" value="${g.playTime ?? ''}"></div>
+      </div>
+      <div class="two-col">
+        <div><label>Min players</label><input type="number" id="e-min" value="${g.minPlayers ?? ''}"></div>
+        <div><label>Max players</label><input type="number" id="e-max" value="${g.maxPlayers ?? ''}"></div>
+      </div>
+      <label>Category</label>
+      <input type="text" id="e-category" list="cat-list" value="${esc(g.category || '')}" placeholder="e.g. Party Game…">
+      ${catDatalist()}
+      <label>Cover image URL</label>
+      <input type="url" id="e-img" value="${esc(g.imageUrl || '')}" placeholder="https://…">
       <label>Notes <span style="font-weight:400">(visible on your public shelf)</span></label>
       <input type="text" id="e-notes" value="${esc(entry.notes)}" placeholder="e.g. sleeved, missing a token…">
-      <label>Cover image URL</label>
-      <input type="url" id="e-img" value="${esc(entry.game.imageUrl || '')}" placeholder="https://…">
       <div class="form-error" id="e-error"></div>
       <button class="btn btn-primary" id="e-save" style="margin-top:14px">Save</button>
     </div>`);
   $('#e-save').onclick = async () => {
     try {
-      await api(`/library/${entry.id}`, { method: 'PATCH', body: { notes: $('#e-notes').value, imageUrl: $('#e-img').value } });
+      await api(`/library/${entry.id}`, {
+        method: 'PATCH',
+        body: {
+          notes: $('#e-notes').value,
+          imageUrl: $('#e-img').value,
+          year: $('#e-year').value || null,
+          minPlayers: $('#e-min').value || null,
+          maxPlayers: $('#e-max').value || null,
+          playTime: $('#e-time').value || null,
+          category: $('#e-category').value,
+        },
+      });
       modalDirty = true;
       toast('Saved');
       closeModal();
@@ -583,7 +650,10 @@ async function viewCrewDetail(id) {
           <button class="btn btn-sm" id="copy-code">Copy</button>
         </div>
       </div>
-      <button class="btn btn-ghost btn-danger btn-sm" id="leave-btn">Leave crew</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary" id="crew-add-btn">+ Add a game</button>
+        <button class="btn btn-ghost btn-danger btn-sm" id="leave-btn">Leave crew</button>
+      </div>
     </div>
 
     <div class="members-row">
@@ -688,7 +758,7 @@ async function viewCrewDetail(id) {
       return;
     }
     if (crewState.view === 'grid') {
-      container.innerHTML = `<div class="grid">${list.map((g) => gameCardHtml(g, { owners: g.owners })).join('')}</div>`;
+      container.innerHTML = `<div class="grid">${list.map((g) => gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true })).join('')}</div>`;
     } else {
       container.innerHTML = `
       <div class="matrix-wrap"><table class="matrix">
@@ -730,12 +800,52 @@ async function viewCrewDetail(id) {
     renderGames();
   });
 
+  $('#crew-add-btn').onclick = () =>
+    openAddModal({ members: members.map((m) => ({ id: m.id, displayName: m.displayName, isMe: m.id === state.user.id })) });
+
+  $('#cw-games').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act="owners"]');
+    if (!btn) return;
+    const card = e.target.closest('[data-game]');
+    const game = games.find((g) => g.id === Number(card.dataset.game));
+    if (game) openOwnersModal(crew, game, members);
+  });
+
   $('#copy-code').onclick = () => copyText(crew.inviteCode);
   $('#leave-btn').onclick = async () => {
     if (!window.confirm(`Leave "${crew.name}"? If you're the last member, the crew is deleted.`)) return;
     await api(`/crews/${id}/leave`, { method: 'POST' });
     toast(`Left ${crew.name}`);
     location.hash = '#/crews';
+  };
+}
+
+// Set exactly who in the crew owns a game — mirrors editing a row of the old spreadsheet.
+function openOwnersModal(crew, game, members) {
+  openModal(`
+    <div class="modal-head"><h2>Who owns ${esc(game.title)}?</h2><button class="modal-close">×</button></div>
+    <div class="modal-body">
+      <div id="owner-rows">
+        ${members.map((m) => `
+        <label class="owner-row" style="--c:${memberColor(m.id)}">
+          <input type="checkbox" value="${m.id}" ${game.owners.some((o) => o.id === m.id) ? 'checked' : ''}>
+          <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
+          <span class="m-name">${esc(m.displayName)}</span>
+        </label>`).join('')}
+      </div>
+      <div class="form-error" id="o-error"></div>
+      <button class="btn btn-primary" id="o-save" style="margin-top:10px">Save owners</button>
+    </div>`);
+  $('#o-save').onclick = async () => {
+    const userIds = [...modalRoot.querySelectorAll('#owner-rows input:checked')].map((i) => Number(i.value));
+    try {
+      await api(`/crews/${crew.id}/games/${game.id}/owners`, { method: 'PUT', body: { userIds } });
+      modalDirty = true;
+      toast(userIds.length ? 'Owners updated' : `${game.title} is no longer on anyone's shelf here`);
+      closeModal();
+    } catch (err) {
+      $('#o-error').textContent = err.message;
+    }
   };
 }
 
