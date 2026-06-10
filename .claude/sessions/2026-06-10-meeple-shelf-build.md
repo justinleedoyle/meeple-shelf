@@ -163,3 +163,23 @@ Nothing — feature-complete as scoped.
   via owners editor himself (Scythe, Wingspan exps, etc.) — real usage!
 - Finspan expansion: name unconfirmed, awaiting Justin (box label).
 - Naming Q (plural vs singular households): recommended KEEPING plural.
+
+## Phase 11 (same day): Wingspan Asia fix + art completion + WRAP-UP
+- Wingspan expansions confirmed by Justin: European, Oceania, Americas, ASIA.
+  "South America" row was mislabeled → created "Wingspan — Asia Expansion"
+  (Stephensons+Bells, BGG 366161, art filled), retired the South America row.
+- fetch-missing-art.js BUILTIN_MAP now covers every known straggler. Art:
+  every owned game on prod has 500px covers (only unowned/composite rows lack).
+- Heat "All expansions" composite row left as-is pending Justin naming the
+  actual Heat expansions.
+
+## BACKLOG (Justin: "pick this up later") — in priority order
+1. Play logging + leaderboard (trip provides launch data; "we played it" on
+   the Surprise banner; per-crew stats/win rates/head-to-head)
+2. BGG ratings + rank from data/bgg-catalog.json (badge + sort) — quick win
+3. Nightly encrypted DB backup off-machine (Fly Tigris bucket) + password reset
+4. Auto-sync Pages nightly (scoped Fly token in GH Actions secret + cron)
+5. Wishlists per household (gift coordination between families)
+6. "Recently added" strip + game detail view (big art, owners, loans, BGG link)
+7. When BGG API token arrives: full-size art, live lookups (BGG_API_TOKEN env
+   var w/ fallback), BGG collection import

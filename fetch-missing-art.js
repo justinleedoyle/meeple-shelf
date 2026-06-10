@@ -37,6 +37,7 @@ const BUILTIN_MAP = {
   'Ultimate Pub Trivia': 135598, // BGG lists it as a version of "Pub Trivia"
   'Battlestar Galactica — Pegasus Expansion': 43539,
   'The Lord of the Rings: Adventure Board Game': 133063, // Pressman "Complete Trilogy"
+  'Wingspan — Asia Expansion': 366161, // standalone on BGG, so not in Wingspan's expansion links
 };
 
 const manualMap = { ...BUILTIN_MAP, ...(process.argv[2] ? JSON.parse(process.argv[2]) : {}) };
