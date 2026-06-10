@@ -247,6 +247,25 @@ app.get('/api/games/search', requireAuth, (req, res) => {
   res.json({ results: results.slice(0, 12) });
 });
 
+// Fire-and-forget: swap a freshly added game's 64px micro thumbnail for the
+// 500px version via BGG's public image API. Failures just keep the micro.
+async function upgradeGameImage(game) {
+  try {
+    if (!game?.image_url?.includes('__micro')) return;
+    const m = game.image_url.match(/pic(\d+)\.[a-z]+$/i);
+    if (!m) return;
+    const res = await fetch(`https://api.geekdo.com/api/images/${m[1]}`, {
+      headers: { 'User-Agent': 'MeepleShelf/1.0 (personal board game library)' },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const url = data?.images?.medium?.url || data?.images?.itempage?.url;
+    if (url) db.prepare('UPDATE games SET image_url = ? WHERE id = ?').run(url, game.id);
+  } catch {
+    /* keep the micro thumbnail */
+  }
+}
+
 // ---------- my library ----------
 
 function entryToJson(r) {
@@ -306,6 +325,7 @@ app.post('/api/library', requireAuth, (req, res) => {
       .prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id, notes) VALUES (?, ?, ?)')
       .run(uid, game.id, notes).changes;
   }
+  upgradeGameImage(game); // async, non-blocking
   res.status(201).json({ game: gameToJson(game), added, requested: ownerIds.length });
 });
 
