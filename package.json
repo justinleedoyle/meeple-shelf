@@ -13,7 +13,8 @@
     "snapshot": "node export-snapshot.js",
     "build-page": "node build-page.js",
     "export": "node export-snapshot.js && node build-page.js",
-    "sync": "node export-snapshot.js && git add data/shelf-snapshot.json && (git diff --quiet HEAD -- data/shelf-snapshot.json || git commit -m \"Update shelf data\" -- data/shelf-snapshot.json) && git push"
+    "sync": "fly ssh console -a meeple-shelf -C \"node /app/export-snapshot.js\" && rm -f /tmp/shelf-snapshot.json && fly ssh sftp get /app/data/shelf-snapshot.json /tmp/shelf-snapshot.json -a meeple-shelf && mv /tmp/shelf-snapshot.json data/shelf-snapshot.json && git add data/shelf-snapshot.json && (git diff --quiet HEAD -- data/shelf-snapshot.json || git commit -m \"Update shelf data\" -- data/shelf-snapshot.json) && git push",
+    "sync-local": "node export-snapshot.js && git add data/shelf-snapshot.json && (git diff --quiet HEAD -- data/shelf-snapshot.json || git commit -m \"Update shelf data\" -- data/shelf-snapshot.json) && git push"
   },
   "engines": {
     "node": ">=18"

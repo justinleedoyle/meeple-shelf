@@ -1,8 +1,8 @@
 # Fly.io config for Meeple Shelf.
 #
 # One-time setup (after `fly auth login`):
-#   fly launch --no-deploy --copy-config    # creates the app (rename if taken)
-#   fly volumes create data --size 1 --region den
+#   fly apps create meeple-shelf            # rename if taken
+#   fly volumes create data --size 1 --region lax
 #   fly deploy
 #   fly ssh console -C "node /app/import-sheet.js"   # load the collection (or seed)
 #
@@ -11,7 +11,7 @@
 # when nobody's using it; it wakes in about a second on the next request.
 
 app = "meeple-shelf"
-primary_region = "den"
+primary_region = "lax"
 
 [build]
   dockerfile = "Dockerfile"

@@ -94,7 +94,22 @@ combined "crew" libraries with friends (who has what).
 - BGG application form (boardgamegeek.com/applications/create): field-by-field
   answers drafted for Justin (non-commercial, public app, tiny volume).
 
-## Phase 6 (same day): hosting prep (Fly.io) — AWAITING JUSTIN
+## Phase 7 (same day): DEPLOYED TO FLY.IO ✅
+- Live at https://meeple-shelf.fly.dev — app "meeple-shelf", region lax (Fly removed
+  den/phx/sea regions — lax is closest now), shared-cpu-1x 512MB, auto-stop,
+  encrypted 1GB volume "data" (vol_4oj9nn22djd8m0xr) at /data, daily snapshots.
+- Account: justin@wallaroomedia.com (personal org). Collection imported on the
+  server (109 games / 169 entries / 79 with art / expansions auto-linked at import).
+  PRODUCTION CREW INVITE CODE: 98PVGE (differs from local ATEH7W — fresh DB).
+- Verified live: anonymous /me, HTTPS login (Secure cookies), crew 106 games,
+  search (30k catalog ships in image), frontend 200.
+- `npm run sync` now snapshots FROM PRODUCTION (fly ssh console + sftp get) →
+  commit → push → Pages rebuild. `npm run sync-local` keeps the old local path.
+- Fly source of truth; local DB = dev sandbox. Justin chose Fly over DO for cost
+  (likes DigitalOcean; noted DO App Platform unsuitable — ephemeral disk).
+- TODO for households: log in at the URL, change passwords (Account menu).
+
+## Phase 6 (same day): hosting prep (Fly.io) — done, superseded by Phase 7
 - Built & tested: POST /api/me/password (validates current, kills other sessions),
   Account modal via "Hi, <name> ▾" nav button, login/signup rate limit (10/15min/IP),
   Secure cookies + trust proxy in production. 7/7 curl tests passed.

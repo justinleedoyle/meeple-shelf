@@ -2,6 +2,8 @@
 
 Your board game shelf, your friends' shelves, and one combined library for game night.
 
+**Live app:** https://meeple-shelf.fly.dev · **Public read-only page:** https://justinleedoyle.github.io/meeple-shelf/
+
 Track the games you own, share your shelf with a public link, and pool shelves with
 friends in a **crew** — so when five people show up on Friday, you can instantly answer
 *"what can we play, and whose house is it at?"*
@@ -77,31 +79,44 @@ owner filters, and the who-has-what matrix all work.
 
 Live page: https://justinleedoyle.github.io/meeple-shelf/
 
-**Publishing is automated.** After adding games locally, run:
+**Publishing is automated.** To refresh it with the latest production data:
 
 ```bash
 npm run sync
 ```
 
-That exports `data/shelf-snapshot.json` (crew name, members, games + owners — nothing
-sensitive), commits it, and pushes. A GitHub Action
+That generates `data/shelf-snapshot.json` **on the Fly.io server** (the source of truth),
+downloads it, commits it, and pushes. A GitHub Action
 ([publish-pages.yml](.github/workflows/publish-pages.yml)) then rebuilds the page from the
 snapshot and deploys it to Pages, usually in under a minute. Pushing template/CSS changes
-redeploys too — the page can't go stale.
+redeploys too. (`npm run sync-local` is the variant that snapshots a local database
+instead, for anyone running this without Fly.)
 
 Locally, `npm run export` builds the same page to `site/index.html` (gitignored) for preview.
 
 To re-import a fresh copy of the Google Sheet, update `data/collection-sheet.md` and rerun
 `npm run import-sheet` (it's idempotent — existing entries are kept, new ✓s become entries).
 
-## Deploying the interactive app for real friends
+## Production (Fly.io)
 
-It runs anywhere Node runs. The only requirement is a persistent disk for the SQLite file:
+The app runs at **https://meeple-shelf.fly.dev** — one `shared-cpu-1x` machine in `lax`
+that auto-stops when idle (wakes in ~1s), with the SQLite database on an encrypted 1GB
+volume mounted at `/data` (daily snapshots, 5-day retention). Config: [fly.toml](fly.toml)
+and [Dockerfile](Dockerfile).
 
-- **Fly.io / Railway:** add a volume, mount it, and set `DB_PATH` to a path on the volume.
-- **A spare machine / home server:** `npm start` behind Tailscale or a reverse proxy is
-  honestly the easiest way to share with a handful of friends.
-- Render's free tier wipes local disk on deploy — use a paid disk or another host.
+Day-to-day commands (after `fly auth login`):
+
+```bash
+fly deploy                 # ship code changes
+fly logs -a meeple-shelf   # tail server logs
+fly ssh console -a meeple-shelf            # shell on the machine
+fly volumes snapshots list vol_4oj9nn22djd8m0xr   # database snapshots
+```
+
+The database on the volume is the source of truth. The local `data/meeple-shelf.db` is
+just a dev sandbox now. It would run equally well on any host with a persistent disk
+(Railway volume, a DigitalOcean droplet) — avoid platforms with ephemeral filesystems
+(e.g. DO App Platform) unless you first migrate off SQLite.
 
 ## Ideas for later
 
