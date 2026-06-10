@@ -43,6 +43,24 @@ combined "crew" libraries with friends (who has what).
 - Verified via local render of docs/ (Chrome not running on this machine, so used a
   python http.server preview config "meeple-shelf-snapshot" in workspace launch.json).
 
+## Phase 3 (same day): owner selection, BGG catalog, mobile
+- Game search now merges community games + curated catalog + a 30k-game BGG
+  dataset (beefsack/bgg-ranking-historicals daily CSV → data/bgg-catalog.json
+  via build-bgg-catalog.js; 2026-06-09 snapshot — note: that repo's same-day
+  file can be empty, take the latest >100KB one). Thumbnails are BGG "micro"
+  64px — soft when upscaled; per-game image override exists.
+- Add modal has "Whose shelf?" multi-select (any crewmate; POST /api/library
+  ownerIds, 403 for non-crewmates). Crew page: "+ Add a game" + per-card
+  "who owns this?" editor (PUT /api/crews/:id/games/:gameId/owners — sets
+  exactly which crew members own it). Edit modal now covers
+  year/players/time/category.
+- enrich-images.js backfilled art for 79/109 imported games (expansions
+  mostly unmatched — BGG ranked list excludes them).
+- Mobile pass: 16px inputs (iOS zoom), (hover:none) keeps card actions
+  visible, stacked filters, larger targets. Verified at 375px (app + static).
+- All 10 new-endpoint tests passed on a throwaway DB; UI add/owners-edit
+  cycle verified and reverted (real data still matches the sheet exactly).
+
 ## In Progress
 Nothing — feature-complete as scoped.
 
