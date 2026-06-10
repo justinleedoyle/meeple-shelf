@@ -146,3 +146,10 @@ Nothing — feature-complete as scoped.
   "Packed (n)" filter chip, Surprise me rolls from packed pool. Verified offline
   cache (SW active, page in caches). Live on Pages. Built for Justin's camping
   trip — live app needs signal; snapshot page is the campsite tool.
+
+## Phase 9 (same day): high-res box art
+- api.geekdo.com/api/images/<id> is PUBLIC (no auth/Cloudflare) and returns signed
+  URLs for all variants. upgrade-images.js swaps __micro (64px) for medium (500px):
+  80/80 local, 79/79 prod. Server auto-upgrades new adds (fire-and-forget in POST
+  /api/library). npm run enrich chains it. Pages + live app verified serving 500px.
+- Trip correction: Airbnb WITH internet — live app usable there; packed list still nice.
