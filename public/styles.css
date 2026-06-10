@@ -299,6 +299,22 @@ select { width: auto; padding: 8px 10px; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.badge.loan {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.exp-line {
+  display: block;
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-bright);
+  text-align: left;
+  padding: 0;
+}
+.exp-line:hover { text-decoration: underline; }
+.exp-arrow { color: var(--faint); }
 .card-owners { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
 .owner-chip {
   font-size: 11.5px;
@@ -513,11 +529,43 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   border: 1px solid var(--line);
   border-radius: 10px;
   margin-bottom: 8px;
-  cursor: pointer;
 }
 .owner-row:hover { background: var(--card); }
+.owner-row .owner-main { display: flex; align-items: center; gap: 11px; flex: 1; cursor: pointer; min-width: 0; }
 .owner-row input { width: 17px; height: 17px; accent-color: var(--accent); }
 .owner-row .m-name { font-weight: 700; font-size: 14px; }
+.owner-row select.loc { width: auto; max-width: 46%; font-size: 13px; padding: 6px 8px; }
+.owner-row select.loc:disabled { opacity: 0.35; }
+
+/* surprise banner (game night picker) */
+.surprise-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  margin-bottom: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-radius: var(--radius);
+}
+.sb-cover {
+  width: 54px;
+  height: 54px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: var(--card);
+}
+.sb-cover img { width: 100%; height: 100%; object-fit: cover; }
+.sb-body { flex: 1; min-width: 0; }
+.sb-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+.sb-title { font-size: 18px; font-weight: 800; line-height: 1.25; }
+.sb-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.sb-actions { display: flex; gap: 8px; align-items: center; }
 
 /* search results in add modal */
 .search-results { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; max-height: 330px; overflow-y: auto; }

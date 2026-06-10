@@ -67,11 +67,17 @@ CREATE TABLE IF NOT EXISTS crew_members (
 );
 `);
 
-// migration for databases created before the category column existed
-try {
-  db.exec('ALTER TABLE games ADD COLUMN category TEXT');
-} catch {
-  /* column already exists */
+// migrations for databases created before these columns existed
+for (const ddl of [
+  'ALTER TABLE games ADD COLUMN category TEXT',
+  'ALTER TABLE games ADD COLUMN expansion_of INTEGER REFERENCES games(id)',
+  'ALTER TABLE library_entries ADD COLUMN loaned_to INTEGER REFERENCES users(id)',
+]) {
+  try {
+    db.exec(ddl);
+  } catch {
+    /* column already exists */
+  }
 }
 
 // ---------- auth helpers ----------
@@ -117,6 +123,45 @@ export function createUser({ username, displayName, password }) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
 }
 
+export function normTitle(t) {
+  return t
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/^the /, '');
+}
+
+// Expansions named like "Wingspan — European Expansion" (the sheet's convention)
+// get linked to their base game when one exists, so the combined view can group
+// them under the base game's card.
+export function autoLinkExpansion(game) {
+  if (!game || game.expansion_of || game.category !== 'Expansion for Base-game') return game;
+  const sep = game.title.indexOf(' — ');
+  if (sep === -1) return game;
+  const baseTitle = game.title.slice(0, sep).trim();
+  let base = db
+    .prepare("SELECT * FROM games WHERE title = ? COLLATE NOCASE AND id != ? AND category IS NOT 'Expansion for Base-game'")
+    .get(baseTitle, game.id);
+  if (!base) {
+    // fuzzy fallback: "Viticulture — Tuscany…" → base "Viticulture: Essential Edition"
+    const n = normTitle(baseTitle);
+    const candidates = db
+      .prepare("SELECT * FROM games WHERE id != ? AND category IS NOT 'Expansion for Base-game'")
+      .all(game.id)
+      .filter((g) => {
+        const gn = normTitle(g.title);
+        return gn === n || gn.startsWith(n + ' ') || n.startsWith(gn + ' ');
+      });
+    if (candidates.length === 1) base = candidates[0];
+  }
+  if (base) {
+    db.prepare('UPDATE games SET expansion_of = ? WHERE id = ?').run(base.id, game.id);
+    game.expansion_of = base.id;
+  }
+  return game;
+}
+
 // Find-or-create a game, deduping by title (case-insensitive) so two friends
 // adding "Catan" end up pointing at the same game row. Backfills any details
 // the existing row is missing.
@@ -134,12 +179,12 @@ export function findOrCreateGame(data) {
         existing.image_url || data.imageUrl || null,
         existing.id
       );
-    return db.prepare('SELECT * FROM games WHERE id = ?').get(existing.id);
+    return autoLinkExpansion(db.prepare('SELECT * FROM games WHERE id = ?').get(existing.id));
   }
   const info = db
     .prepare('INSERT INTO games (title, year, min_players, max_players, play_time, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(title, data.year ?? null, data.minPlayers ?? null, data.maxPlayers ?? null, data.playTime ?? null, data.category || null, data.imageUrl || null);
-  return db.prepare('SELECT * FROM games WHERE id = ?').get(info.lastInsertRowid);
+  return autoLinkExpansion(db.prepare('SELECT * FROM games WHERE id = ?').get(info.lastInsertRowid));
 }
 
 export function createCrew(name, userId) {
@@ -167,6 +212,7 @@ export function gameToJson(g) {
     maxPlayers: g.max_players,
     playTime: g.play_time,
     category: g.category,
+    expansionOf: g.expansion_of,
     imageUrl: g.image_url,
   };
 }

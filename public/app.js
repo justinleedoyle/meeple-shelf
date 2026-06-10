@@ -123,7 +123,30 @@ function emptyState(emoji, title, bodyHtml, ctaHtml = '') {
   return `<div class="empty"><div class="e-emoji">${emoji}</div><h2>${title}</h2><p>${bodyHtml}</p>${ctaHtml}</div>`;
 }
 
-function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners } = {}) {
+// Group a filtered list so expansions nest under their base game's card —
+// but only when the base is present in the same list; orphans stay standalone.
+function groupExpansions(list) {
+  const present = new Set(list.map((g) => g.id));
+  const top = [];
+  const exps = new Map();
+  for (const g of list) {
+    if (g.expansionOf && present.has(g.expansionOf)) {
+      if (!exps.has(g.expansionOf)) exps.set(g.expansionOf, []);
+      exps.get(g.expansionOf).push(g);
+    } else {
+      top.push(g);
+    }
+  }
+  return { top, exps };
+}
+
+// "Wingspan — European Expansion" → "European Expansion" (for compact lists)
+function expShortTitle(g) {
+  const sep = g.title.indexOf(' — ');
+  return sep === -1 ? g.title : g.title.slice(sep + 3);
+}
+
+function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners, loanedTo, expansions, expanded } = {}) {
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   const players = fmtPlayers(game);
   const time = fmtTime(game);
@@ -147,9 +170,11 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
         ${players ? `<span class="badge">${players}</span>` : ''}
         ${time ? `<span class="badge">${time}</span>` : ''}
         ${game.category ? `<span class="badge">${esc(game.category)}</span>` : ''}
+        ${loanedTo ? `<span class="badge loan">📍 with ${esc(loanedTo.displayName)}</span>` : ''}
       </div>
       ${notes ? `<div class="card-notes">${esc(notes)}</div>` : ''}
-      ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}</span>`).join('')}</div>` : ''}
+      ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}` : ''}</span>`).join('')}</div>` : ''}
+      ${expansions?.length ? `<button class="exp-line" data-act="toggle-exp" title="${esc(expansions.map((e) => `${expShortTitle(e)} (${(e.owners || []).map((o) => o.displayName).join(', ')})`).join('\n'))}">＋ ${expansions.length} expansion${expansions.length > 1 ? 's' : ''} ${expanded ? '▾' : '▸'}</button>` : ''}
       ${addedAt ? `<div class="added-date">Added ${fmtDate(addedAt)}</div>` : ''}
     </div>
   </div>`;
@@ -316,7 +341,7 @@ async function viewLibrary() {
     if (q) list = list.filter((en) => en.game.title.toLowerCase().includes(q));
     if (libState.sort === 'title') list.sort((a, b) => a.game.title.localeCompare(b.game.title));
     grid.innerHTML = list.length
-      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, notes: en.notes, addedAt: en.addedAt, actions: true })).join('')}</div>`
+      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo })).join('')}</div>`
       : emptyState('🔍', 'No matches', 'No games on your shelf match that search.');
   }
   renderGrid();
@@ -506,8 +531,14 @@ async function openAddModal(ownersCtx = null) {
   };
 }
 
-function openEditModal(entry) {
+async function openEditModal(entry) {
   const g = entry.game;
+  let mates = [];
+  try {
+    mates = (await api('/crewmates')).crewmates.filter((m) => !m.isMe);
+  } catch {
+    /* not in any crew yet */
+  }
   openModal(`
     <div class="modal-head"><h2>${esc(g.title)}</h2><button class="modal-close">×</button></div>
     <div class="modal-body">
@@ -524,6 +555,11 @@ function openEditModal(entry) {
       ${catDatalist()}
       <label>Cover image URL</label>
       <input type="url" id="e-img" value="${esc(g.imageUrl || '')}" placeholder="https://…">
+      ${mates.length ? `<label>Currently at</label>
+      <select id="e-loan" style="width:100%">
+        <option value="">Home</option>
+        ${mates.map((m) => `<option value="${m.id}" ${entry.loanedTo?.id === m.id ? 'selected' : ''}>with ${esc(m.displayName)}</option>`).join('')}
+      </select>` : ''}
       <label>Notes <span style="font-weight:400">(visible on your public shelf)</span></label>
       <input type="text" id="e-notes" value="${esc(entry.notes)}" placeholder="e.g. sleeved, missing a token…">
       <div class="form-error" id="e-error"></div>
@@ -541,6 +577,7 @@ function openEditModal(entry) {
           maxPlayers: $('#e-max').value || null,
           playTime: $('#e-time').value || null,
           category: $('#e-category').value,
+          ...($('#e-loan') ? { loanedTo: $('#e-loan').value || null } : {}),
         },
       });
       modalDirty = true;
@@ -632,10 +669,10 @@ async function viewCrews() {
 
 // ---------- crew detail: the combined library ----------
 
-const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid' };
+const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set() };
 
 async function viewCrewDetail(id) {
-  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid' });
+  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set() });
   const { crew, members, games } = await api('/crews/' + id);
   const multiOwned = games.filter((g) => g.owners.length > 1).length;
   const categories = [...new Set(games.map((g) => g.category).filter(Boolean))].sort();
@@ -705,12 +742,14 @@ async function viewCrewDetail(id) {
         </select>
       </div>
       <span class="nav-spacer"></span>
+      <button class="btn" id="surprise-btn">🎲 Surprise me</button>
       <div class="segmented">
         <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
         <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
       </div>
     </div>
 
+    <div id="surprise-result" style="display:none"></div>
     <div class="result-count" id="cw-count"></div>
     <div id="cw-games"></div>
   </div>`;
@@ -758,8 +797,25 @@ async function viewCrewDetail(id) {
       return;
     }
     if (crewState.view === 'grid') {
-      container.innerHTML = `<div class="grid">${list.map((g) => gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true })).join('')}</div>`;
+      const { top, exps } = groupExpansions(list);
+      const cards = [];
+      for (const g of top) {
+        const kids = exps.get(g.id);
+        const expanded = crewState.expanded.has(g.id);
+        cards.push(gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true, expansions: kids, expanded }));
+        if (kids && expanded) {
+          for (const e of kids) cards.push(gameCardHtml(e, { owners: e.owners, gameId: e.id, editOwners: true }));
+        }
+      }
+      container.innerHTML = `<div class="grid">${cards.join('')}</div>`;
     } else {
+      // expansions sort directly under their base game
+      const titleById = new Map(games.map((g) => [g.id, g.title]));
+      const msorted = [...list].sort((a, b) => {
+        const ka = a.expansionOf && titleById.has(a.expansionOf) ? titleById.get(a.expansionOf) : a.title;
+        const kb = b.expansionOf && titleById.has(b.expansionOf) ? titleById.get(b.expansionOf) : b.title;
+        return ka.localeCompare(kb) || (a.expansionOf ? 1 : 0) - (b.expansionOf ? 1 : 0) || a.title.localeCompare(b.title);
+      });
       container.innerHTML = `
       <div class="matrix-wrap"><table class="matrix">
         <thead><tr>
@@ -767,13 +823,16 @@ async function viewCrewDetail(id) {
           ${members.map((m) => `<th><span class="dot" style="background:${memberColor(m.id)}"></span>${esc(m.displayName)}</th>`).join('')}
         </tr></thead>
         <tbody>
-          ${list.map((g) => `<tr>
-            <td><span class="g-title">${esc(g.title)}</span>${fmtPlayers(g) ? `<span class="g-meta">${fmtPlayers(g)}</span>` : ''}</td>
+          ${msorted.map((g) => {
+            const isExp = g.expansionOf && titleById.has(g.expansionOf);
+            return `<tr>
+            <td>${isExp ? '<span class="exp-arrow">↳ </span>' : ''}<span class="g-title">${esc(isExp ? expShortTitle(g) : g.title)}</span>${fmtPlayers(g) ? `<span class="g-meta">${fmtPlayers(g)}</span>` : ''}</td>
             ${members.map((m) => {
               const owns = g.owners.some((o) => o.id === m.id);
               return `<td>${owns ? `<span class="check" style="color:${memberColor(m.id)}">✓</span>` : ''}</td>`;
             }).join('')}
-          </tr>`).join('')}
+          </tr>`;
+          }).join('')}
         </tbody>
       </table></div>`;
     }
@@ -804,11 +863,53 @@ async function viewCrewDetail(id) {
     openAddModal({ members: members.map((m) => ({ id: m.id, displayName: m.displayName, isMe: m.id === state.user.id })) });
 
   $('#cw-games').addEventListener('click', (e) => {
+    const tog = e.target.closest('[data-act="toggle-exp"]');
+    if (tog) {
+      const id = Number(tog.closest('[data-game]').dataset.game);
+      if (crewState.expanded.has(id)) crewState.expanded.delete(id);
+      else crewState.expanded.add(id);
+      renderGames();
+      return;
+    }
     const btn = e.target.closest('[data-act="owners"]');
     if (!btn) return;
     const card = e.target.closest('[data-game]');
     const game = games.find((g) => g.id === Number(card.dataset.game));
     if (game) openOwnersModal(crew, game, members);
+  });
+
+  // ---- the game night picker: current filters + dice ----
+  function surpriseHtml(g, final) {
+    return `
+      <div class="surprise-banner">
+        <div class="sb-cover">${g.imageUrl ? `<img src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : '🎲'}</div>
+        <div class="sb-body">
+          <div class="sb-label">${final ? "Tonight you're playing" : 'Rolling…'}</div>
+          <div class="sb-title">${esc(g.title)}</div>
+          ${final ? `<div class="sb-meta">${[fmtPlayers(g), fmtTime(g)].filter(Boolean).join(' · ')}${g.owners?.length ? ` · owned by ${esc(g.owners.map((o) => o.displayName).join(', '))}` : ''}</div>` : ''}
+        </div>
+        ${final ? `<div class="sb-actions"><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">✕</button></div>` : ''}
+      </div>`;
+  }
+  function rollSurprise() {
+    const pool = filtered().filter((g) => !g.expansionOf && g.category !== 'Expansion for Base-game');
+    if (!pool.length) return toast('No eligible games with these filters');
+    const banner = $('#surprise-result');
+    banner.style.display = '';
+    let spins = 0;
+    const itv = setInterval(() => {
+      const g = pool[Math.floor(Math.random() * pool.length)];
+      banner.innerHTML = surpriseHtml(g, spins >= 14);
+      if (spins++ >= 14) clearInterval(itv);
+    }, 70);
+  }
+  $('#surprise-btn').onclick = rollSurprise;
+  $('#surprise-result').addEventListener('click', (e) => {
+    if (e.target.closest('#sb-again')) rollSurprise();
+    if (e.target.closest('#sb-close')) {
+      $('#surprise-result').style.display = 'none';
+      $('#surprise-result').innerHTML = '';
+    }
   });
 
   $('#copy-code').onclick = () => copyText(crew.inviteCode);
@@ -826,22 +927,42 @@ function openOwnersModal(crew, game, members) {
     <div class="modal-head"><h2>Who owns ${esc(game.title)}?</h2><button class="modal-close">×</button></div>
     <div class="modal-body">
       <div id="owner-rows">
-        ${members.map((m) => `
-        <label class="owner-row" style="--c:${memberColor(m.id)}">
-          <input type="checkbox" value="${m.id}" ${game.owners.some((o) => o.id === m.id) ? 'checked' : ''}>
-          <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
-          <span class="m-name">${esc(m.displayName)}</span>
-        </label>`).join('')}
+        ${members.map((m) => {
+          const owner = game.owners.find((o) => o.id === m.id);
+          const cur = owner?.loanedTo?.id ?? '';
+          return `
+        <div class="owner-row" style="--c:${memberColor(m.id)}">
+          <label class="owner-main">
+            <input type="checkbox" value="${m.id}" ${owner ? 'checked' : ''}>
+            <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
+            <span class="m-name">${esc(m.displayName)}</span>
+          </label>
+          <select class="loc" data-owner="${m.id}" ${owner ? '' : 'disabled'} title="Where is this copy right now?">
+            <option value="">at home</option>
+            ${members.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${cur === x.id ? 'selected' : ''}>with ${esc(x.displayName)}</option>`).join('')}
+          </select>
+        </div>`;
+        }).join('')}
       </div>
       <div class="form-error" id="o-error"></div>
-      <button class="btn btn-primary" id="o-save" style="margin-top:10px">Save owners</button>
+      <button class="btn btn-primary" id="o-save" style="margin-top:10px">Save</button>
     </div>`);
+  for (const cb of modalRoot.querySelectorAll('#owner-rows input[type="checkbox"]')) {
+    cb.onchange = () => {
+      const sel = modalRoot.querySelector(`.loc[data-owner="${cb.value}"]`);
+      sel.disabled = !cb.checked;
+      if (!cb.checked) sel.value = '';
+    };
+  }
   $('#o-save').onclick = async () => {
-    const userIds = [...modalRoot.querySelectorAll('#owner-rows input:checked')].map((i) => Number(i.value));
+    const owners = [...modalRoot.querySelectorAll('#owner-rows input:checked')].map((i) => ({
+      id: Number(i.value),
+      loanedTo: modalRoot.querySelector(`.loc[data-owner="${i.value}"]`).value || null,
+    }));
     try {
-      await api(`/crews/${crew.id}/games/${game.id}/owners`, { method: 'PUT', body: { userIds } });
+      await api(`/crews/${crew.id}/games/${game.id}/owners`, { method: 'PUT', body: { owners } });
       modalDirty = true;
-      toast(userIds.length ? 'Owners updated' : `${game.title} is no longer on anyone's shelf here`);
+      toast(owners.length ? 'Saved' : `${game.title} is no longer on anyone's shelf here`);
       closeModal();
     } catch (err) {
       $('#o-error').textContent = err.message;

@@ -214,16 +214,28 @@ app.get('/api/games/search', requireAuth, (req, res) => {
 
 // ---------- my library ----------
 
+function entryToJson(r) {
+  return {
+    id: r.entry_id,
+    notes: r.notes,
+    addedAt: r.added_at,
+    loanedTo: r.loaned_to_id ? { id: r.loaned_to_id, displayName: r.loaned_to_name } : null,
+    game: gameToJson(r),
+  };
+}
+
+const ENTRY_SELECT = `
+  SELECT le.id AS entry_id, le.notes, le.added_at,
+         le.loaned_to AS loaned_to_id, lb.display_name AS loaned_to_name, g.*
+  FROM library_entries le
+  JOIN games g ON g.id = le.game_id
+  LEFT JOIN users lb ON lb.id = le.loaned_to`;
+
 function libraryEntriesFor(userId) {
   return db
-    .prepare(
-      `SELECT le.id AS entry_id, le.notes, le.added_at, g.*
-       FROM library_entries le JOIN games g ON g.id = le.game_id
-       WHERE le.user_id = ?
-       ORDER BY le.added_at DESC, le.id DESC`
-    )
+    .prepare(`${ENTRY_SELECT} WHERE le.user_id = ? ORDER BY le.added_at DESC, le.id DESC`)
     .all(userId)
-    .map((r) => ({ id: r.entry_id, notes: r.notes, addedAt: r.added_at, game: gameToJson(r) }));
+    .map(entryToJson);
 }
 
 app.get('/api/library', requireAuth, (req, res) => {
@@ -286,13 +298,19 @@ app.patch('/api/library/:id', requireAuth, (req, res) => {
     db.prepare(`UPDATE games SET ${Object.keys(stats).map((k) => k + ' = ?').join(', ')} WHERE id = ?`)
       .run(...Object.values(stats), entry.game_id);
   }
-  const updated = db
-    .prepare(
-      `SELECT le.id AS entry_id, le.notes, le.added_at, g.* FROM library_entries le
-       JOIN games g ON g.id = le.game_id WHERE le.id = ?`
-    )
-    .get(entry.id);
-  res.json({ entry: { id: updated.entry_id, notes: updated.notes, addedAt: updated.added_at, game: gameToJson(updated) } });
+  // Lend this copy to a crewmate ("loanedTo": userId) or bring it home (null)
+  if (req.body.loanedTo !== undefined) {
+    const loanedTo = req.body.loanedTo == null || req.body.loanedTo === '' ? null : Number(req.body.loanedTo);
+    if (loanedTo != null) {
+      const allowed = new Set(crewmateIds(req.user.id));
+      if (loanedTo === req.user.id || !allowed.has(loanedTo)) {
+        return res.status(400).json({ error: 'You can only lend games to members of your crews' });
+      }
+    }
+    db.prepare('UPDATE library_entries SET loaned_to = ? WHERE id = ?').run(loanedTo, entry.id);
+  }
+  const updated = db.prepare(`${ENTRY_SELECT} WHERE le.id = ?`).get(entry.id);
+  res.json({ entry: entryToJson(updated) });
 });
 
 app.delete('/api/library/:id', requireAuth, (req, res) => {
@@ -376,14 +394,17 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
     .all(crew.id)
     .map((m) => ({ id: m.id, displayName: m.display_name, gameCount: m.game_count }));
 
-  // The combined library: every game any member owns, with its owners attached.
+  // The combined library: every game any member owns, with its owners attached
+  // (and where each copy physically is, if lent out).
   const rows = db
     .prepare(
-      `SELECT g.*, u.id AS owner_id, u.display_name AS owner_name
+      `SELECT g.*, u.id AS owner_id, u.display_name AS owner_name,
+              le.loaned_to AS loaned_to_id, lb.display_name AS loaned_to_name
        FROM crew_members cm
        JOIN library_entries le ON le.user_id = cm.user_id
        JOIN games g ON g.id = le.game_id
        JOIN users u ON u.id = cm.user_id
+       LEFT JOIN users lb ON lb.id = le.loaned_to
        WHERE cm.crew_id = ?
        ORDER BY g.title COLLATE NOCASE, u.display_name`
     )
@@ -391,7 +412,11 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
   const byGame = new Map();
   for (const r of rows) {
     if (!byGame.has(r.id)) byGame.set(r.id, { ...gameToJson(r), owners: [] });
-    byGame.get(r.id).owners.push({ id: r.owner_id, displayName: r.owner_name });
+    byGame.get(r.id).owners.push({
+      id: r.owner_id,
+      displayName: r.owner_name,
+      loanedTo: r.loaned_to_id ? { id: r.loaned_to_id, displayName: r.loaned_to_name } : null,
+    });
   }
 
   res.json({
@@ -417,15 +442,29 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
     .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
     .all(crew.id)
     .map((r) => r.user_id);
-  const want = new Set(Array.isArray(req.body.userIds) ? req.body.userIds.map(Number) : []);
-  for (const id of want) {
+  // Body: { owners: [{ id, loanedTo? }] } — loanedTo marks where that copy
+  // physically is. Legacy { userIds: [...] } still accepted.
+  const list = Array.isArray(req.body.owners)
+    ? req.body.owners
+    : Array.isArray(req.body.userIds)
+      ? req.body.userIds.map((id) => ({ id }))
+      : [];
+  const want = new Map();
+  for (const o of list) {
+    const id = Number(o.id);
+    const loanedTo = o.loanedTo == null || o.loanedTo === '' ? null : Number(o.loanedTo);
     if (!memberIds.includes(id)) return res.status(400).json({ error: 'All owners must be members of this crew' });
+    if (loanedTo != null && (loanedTo === id || !memberIds.includes(loanedTo))) {
+      return res.status(400).json({ error: 'Games can only be lent to other members of this crew' });
+    }
+    want.set(id, loanedTo);
   }
 
   db.transaction(() => {
     for (const uid of memberIds) {
       if (want.has(uid)) {
         db.prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id) VALUES (?, ?)').run(uid, game.id);
+        db.prepare('UPDATE library_entries SET loaned_to = ? WHERE user_id = ? AND game_id = ?').run(want.get(uid), uid, game.id);
       } else {
         db.prepare('DELETE FROM library_entries WHERE user_id = ? AND game_id = ?').run(uid, game.id);
       }
@@ -434,11 +473,19 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
 
   const owners = db
     .prepare(
-      `SELECT u.id, u.display_name FROM library_entries le JOIN users u ON u.id = le.user_id
+      `SELECT u.id, u.display_name, le.loaned_to AS loaned_to_id, lb.display_name AS loaned_to_name
+       FROM library_entries le JOIN users u ON u.id = le.user_id
+       LEFT JOIN users lb ON lb.id = le.loaned_to
        WHERE le.game_id = ? AND le.user_id IN (${memberIds.map(() => '?').join(',')}) ORDER BY u.display_name`
     )
     .all(game.id, ...memberIds);
-  res.json({ owners: owners.map((o) => ({ id: o.id, displayName: o.display_name })) });
+  res.json({
+    owners: owners.map((o) => ({
+      id: o.id,
+      displayName: o.display_name,
+      loanedTo: o.loaned_to_id ? { id: o.loaned_to_id, displayName: o.loaned_to_name } : null,
+    })),
+  });
 });
 
 app.post('/api/crews/:id/leave', requireAuth, (req, res) => {

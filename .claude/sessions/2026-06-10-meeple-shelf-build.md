@@ -76,6 +76,24 @@ combined "crew" libraries with friends (who has what).
   Wiring live lookups deferred until Justin has a token (BGG_API_TOKEN env var
   planned, fallback to local datasets).
 
+## Phase 5 (same day): loans, picker, expansion grouping, PWA
+- Borrow tracking: library_entries.loaned_to (migrated via ALTER). Set from edit
+  modal ("Currently at") or the crew owners modal (per-owner location select).
+  Owners PUT body is now { owners: [{ id, loanedTo }] } (legacy userIds accepted).
+  Loan shows as "Owner → Holder" chips and a 📍 badge on My Shelf.
+- Game-night picker: "🎲 Surprise me" on crew page + static page — rolls from the
+  CURRENT filtered list, excluding expansions; animated banner with Roll again.
+- Expansion grouping: games.expansion_of, autoLinkExpansion() on add (em-dash
+  title convention + fuzzy base match), npm run link-expansions backfilled 19/19.
+  Crew grid nests expansions under base ("+N expansions" toggle); matrix indents ↳.
+  My Shelf intentionally NOT grouped (direct edit/remove access matters there).
+- PWA: public/icon.svg → PNGs via qlmanage+sips; manifest + apple-touch-icon on
+  app and static page; site/ gets manifest (crew-named), sw.js (network-first).
+- All endpoint tests passed (auto-link, loans incl. validations, owners+loans PUT).
+  UI verified incl. loan set/revert cycle — real data unchanged.
+- BGG application form (boardgamegeek.com/applications/create): field-by-field
+  answers drafted for Justin (non-commercial, public app, tiny volume).
+
 ## In Progress
 Nothing — feature-complete as scoped.
 

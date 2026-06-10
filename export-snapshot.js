@@ -38,12 +38,13 @@ const members = db
 const rows = db
   .prepare(
     `SELECT g.id, g.title, g.year, g.min_players AS minPlayers, g.max_players AS maxPlayers,
-            g.play_time AS playTime, g.category, g.image_url AS imageUrl,
-            u.id AS ownerId, u.display_name AS ownerName
+            g.play_time AS playTime, g.category, g.expansion_of AS expansionOf, g.image_url AS imageUrl,
+            u.id AS ownerId, u.display_name AS ownerName, lb.display_name AS loanedToName
      FROM crew_members cm
      JOIN library_entries le ON le.user_id = cm.user_id
      JOIN games g ON g.id = le.game_id
      JOIN users u ON u.id = cm.user_id
+     LEFT JOIN users lb ON lb.id = le.loaned_to
      WHERE cm.crew_id = ?
      ORDER BY g.title COLLATE NOCASE, u.display_name`
   )
@@ -53,11 +54,11 @@ const byGame = new Map();
 for (const r of rows) {
   if (!byGame.has(r.id)) {
     byGame.set(r.id, {
-      title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers,
-      playTime: r.playTime, category: r.category, imageUrl: r.imageUrl, owners: [],
+      id: r.id, title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers,
+      playTime: r.playTime, category: r.category, expansionOf: r.expansionOf, imageUrl: r.imageUrl, owners: [],
     });
   }
-  byGame.get(r.id).owners.push({ id: r.ownerId, displayName: r.ownerName });
+  byGame.get(r.id).owners.push({ id: r.ownerId, displayName: r.ownerName, loanedToName: r.loanedToName || null });
 }
 
 const data = {

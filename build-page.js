@@ -1,10 +1,11 @@
 // Builds the public read-only page from data/shelf-snapshot.json + public/styles.css
-// into site/index.html. Pure Node, zero dependencies, no database — safe to run in
-// CI (.github/workflows/publish-pages.yml deploys site/ to GitHub Pages on push).
+// into site/ (index.html, manifest, service worker, icons). Pure Node, zero
+// dependencies, no database — safe to run in CI
+// (.github/workflows/publish-pages.yml deploys site/ to GitHub Pages on push).
 //
 //   npm run build-page   # or: npm run export (snapshot + build together)
 
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, copyFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,7 +30,9 @@ const html = `<!doctype html>
 <meta name="theme-color" content="#181412">
 <meta name="robots" content="noindex">
 <title>${data.crewName} — Meeple Shelf</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎲</text></svg>">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
 <style>
 ${css}
 .snapshot-note { color: var(--faint); font-size: 13px; }
@@ -59,10 +62,26 @@ function fmtTime(g) {
   const h = t / 60;
   return '⏱ ' + (Number.isInteger(h) ? h : h.toFixed(1)) + ' hr';
 }
+function expShortTitle(g) {
+  const sep = g.title.indexOf(' — ');
+  return sep === -1 ? g.title : g.title.slice(sep + 3);
+}
+function groupExpansions(list) {
+  const present = new Set(list.map((g) => g.id));
+  const top = [], exps = new Map();
+  for (const g of list) {
+    if (g.expansionOf && present.has(g.expansionOf)) {
+      if (!exps.has(g.expansionOf)) exps.set(g.expansionOf, []);
+      exps.get(g.expansionOf).push(g);
+    } else top.push(g);
+  }
+  return { top, exps };
+}
 
-const state = { q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid' };
+const state = { q: '', players: 'any', time: 'any', owner: 'all', category: 'all', view: 'grid', expanded: new Set() };
 const categories = [...new Set(DATA.games.map((g) => g.category).filter(Boolean))].sort();
 const multiOwned = DATA.games.filter((g) => g.owners.length > 1).length;
+const titleById = new Map(DATA.games.map((g) => [g.id, g.title]));
 
 document.getElementById('app').innerHTML = \`
 <div class="container">
@@ -90,11 +109,13 @@ document.getElementById('app').innerHTML = \`
     </div>
     \${categories.length ? \`<div class="filter-group"><span class="glabel">Category</span><select id="f-category"><option value="all">All</option>\${categories.map((c) => \`<option value="\${esc(c)}">\${esc(c)}</option>\`).join('')}</select></div>\` : ''}
     <span class="nav-spacer"></span>
+    <button class="btn" id="surprise-btn">🎲 Surprise me</button>
     <div class="segmented">
       <button data-view="grid" class="active">Grid</button>
       <button data-view="matrix">Who has what</button>
     </div>
   </div>
+  <div id="surprise-result" style="display:none"></div>
   <div class="result-count" id="f-count"></div>
   <div id="games"></div>
   <div class="public-footer">Built with <strong>Meeple Shelf</strong> 🎲</div>
@@ -128,10 +149,10 @@ function filtered() {
   return list;
 }
 
-function card(g) {
+function card(g, expansions, expanded) {
   const grad = COVER_GRADS[hashStr(g.title) % COVER_GRADS.length];
   const players = fmtPlayers(g), time = fmtTime(g);
-  return \`<div class="game-card">
+  return \`<div class="game-card" data-game="\${g.id}">
     <div class="cover" style="background:linear-gradient(135deg, \${grad[0]}, \${grad[1]})">
       <span class="cover-letter">\${esc(g.title[0].toUpperCase())}</span><span class="cover-die">🎲</span>
       \${g.imageUrl ? \`<img loading="lazy" src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : ''}
@@ -139,7 +160,8 @@ function card(g) {
     <div class="card-body">
       <div class="card-title">\${esc(g.title)}\${g.year ? \` <span style="color:var(--faint);font-weight:400">(\${g.year})</span>\` : ''}</div>
       <div class="card-meta">\${players ? \`<span class="badge">\${players}</span>\` : ''}\${time ? \`<span class="badge">\${time}</span>\` : ''}\${g.category ? \`<span class="badge">\${esc(g.category)}</span>\` : ''}</div>
-      <div class="card-owners">\${g.owners.map((o) => \`<span class="owner-chip" style="--c:\${memberColor(o.id)}">\${esc(o.displayName)}</span>\`).join('')}</div>
+      <div class="card-owners">\${g.owners.map((o) => \`<span class="owner-chip" style="--c:\${memberColor(o.id)}">\${esc(o.displayName)}\${o.loanedToName ? ' → ' + esc(o.loanedToName) : ''}</span>\`).join('')}</div>
+      \${expansions?.length ? \`<button class="exp-line" data-toggle="\${g.id}" title="\${esc(expansions.map((e) => expShortTitle(e) + ' (' + e.owners.map((o) => o.displayName).join(', ') + ')').join('\\n'))}">＋ \${expansions.length} expansion\${expansions.length > 1 ? 's' : ''} \${expanded ? '▾' : '▸'}</button>\` : ''}
     </div>
   </div>\`;
 }
@@ -153,11 +175,27 @@ function render() {
     return;
   }
   if (state.view === 'grid') {
-    el.innerHTML = '<div class="grid">' + list.map(card).join('') + '</div>';
+    const { top, exps } = groupExpansions(list);
+    const cards = [];
+    for (const g of top) {
+      const kids = exps.get(g.id);
+      const expanded = state.expanded.has(g.id);
+      cards.push(card(g, kids, expanded));
+      if (kids && expanded) for (const e of kids) cards.push(card(e));
+    }
+    el.innerHTML = '<div class="grid">' + cards.join('') + '</div>';
   } else {
+    const msorted = [...list].sort((a, b) => {
+      const ka = a.expansionOf && titleById.has(a.expansionOf) ? titleById.get(a.expansionOf) : a.title;
+      const kb = b.expansionOf && titleById.has(b.expansionOf) ? titleById.get(b.expansionOf) : b.title;
+      return ka.localeCompare(kb) || (a.expansionOf ? 1 : 0) - (b.expansionOf ? 1 : 0) || a.title.localeCompare(b.title);
+    });
     el.innerHTML = \`<div class="matrix-wrap"><table class="matrix">
       <thead><tr><th>Game</th>\${DATA.members.map((m) => \`<th><span class="dot" style="background:\${memberColor(m.id)}"></span>\${esc(m.displayName)}</th>\`).join('')}</tr></thead>
-      <tbody>\${list.map((g) => \`<tr><td><span class="g-title">\${esc(g.title)}</span>\${fmtPlayers(g) ? \`<span class="g-meta">\${fmtPlayers(g)}</span>\` : ''}</td>\${DATA.members.map((m) => \`<td>\${g.owners.some((o) => o.id === m.id) ? \`<span class="check" style="color:\${memberColor(m.id)}">✓</span>\` : ''}</td>\`).join('')}</tr>\`).join('')}</tbody>
+      <tbody>\${msorted.map((g) => {
+        const isExp = g.expansionOf && titleById.has(g.expansionOf);
+        return \`<tr><td>\${isExp ? '<span class="exp-arrow">↳ </span>' : ''}<span class="g-title">\${esc(isExp ? expShortTitle(g) : g.title)}</span>\${fmtPlayers(g) ? \`<span class="g-meta">\${fmtPlayers(g)}</span>\` : ''}</td>\${DATA.members.map((m) => \`<td>\${g.owners.some((o) => o.id === m.id) ? \`<span class="check" style="color:\${memberColor(m.id)}">✓</span>\` : ''}</td>\`).join('')}</tr>\`;
+      }).join('')}</tbody>
     </table></div>\`;
   }
 }
@@ -182,12 +220,93 @@ document.querySelector('.segmented').addEventListener('click', (e) => {
   document.querySelectorAll('.segmented button').forEach((b) => b.classList.toggle('active', b === btn));
   render();
 });
+document.getElementById('games').addEventListener('click', (e) => {
+  const tog = e.target.closest('[data-toggle]');
+  if (!tog) return;
+  const id = Number(tog.dataset.toggle);
+  state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+  render();
+});
+
+// ---- game night picker: current filters + dice ----
+function surpriseHtml(g, final) {
+  return \`<div class="surprise-banner">
+    <div class="sb-cover">\${g.imageUrl ? \`<img src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : '🎲'}</div>
+    <div class="sb-body">
+      <div class="sb-label">\${final ? "Tonight you're playing" : 'Rolling…'}</div>
+      <div class="sb-title">\${esc(g.title)}</div>
+      \${final ? \`<div class="sb-meta">\${[fmtPlayers(g), fmtTime(g)].filter(Boolean).join(' · ')}\${g.owners?.length ? ' · owned by ' + esc(g.owners.map((o) => o.displayName).join(', ')) : ''}</div>\` : ''}
+    </div>
+    \${final ? '<div class="sb-actions"><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">✕</button></div>' : ''}
+  </div>\`;
+}
+function rollSurprise() {
+  const pool = filtered().filter((g) => !g.expansionOf && g.category !== 'Expansion for Base-game');
+  const banner = document.getElementById('surprise-result');
+  if (!pool.length) { banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  let spins = 0;
+  const itv = setInterval(() => {
+    const g = pool[Math.floor(Math.random() * pool.length)];
+    banner.innerHTML = surpriseHtml(g, spins >= 14);
+    if (spins++ >= 14) clearInterval(itv);
+  }, 70);
+}
+document.getElementById('surprise-btn').onclick = rollSurprise;
+document.getElementById('surprise-result').addEventListener('click', (e) => {
+  if (e.target.closest('#sb-again')) rollSurprise();
+  if (e.target.closest('#sb-close')) {
+    const b = document.getElementById('surprise-result');
+    b.style.display = 'none';
+    b.innerHTML = '';
+  }
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 </script>
 </body>
 </html>
 `;
 
+const manifest = {
+  name: `${data.crewName} — Meeple Shelf`,
+  short_name: 'Game Shelf',
+  description: 'The combined board game library — who has what for game night.',
+  display: 'standalone',
+  start_url: './',
+  scope: './',
+  background_color: '#181412',
+  theme_color: '#181412',
+  icons: [
+    { src: './icon-512.png', sizes: '512x512', type: 'image/png' },
+    { src: './icon-180.png', sizes: '180x180', type: 'image/png' },
+    { src: './icon.svg', sizes: 'any', type: 'image/svg+xml' },
+  ],
+};
+
+// Network-first with cache fallback: always fresh when online, still opens offline.
+const sw = `const CACHE = 'meeple-shelf-v1';
+self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request)
+      .then((r) => {
+        const copy = r.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        return r;
+      })
+      .catch(() => caches.match(e.request))
+  );
+});
+`;
+
 const siteDir = path.join(__dirname, 'site');
 mkdirSync(siteDir, { recursive: true });
 writeFileSync(path.join(siteDir, 'index.html'), html);
-console.log(`Built "${data.crewName}" — ${data.games.length} games (data from ${data.generated}) → site/index.html`);
+writeFileSync(path.join(siteDir, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2));
+writeFileSync(path.join(siteDir, 'sw.js'), sw);
+for (const f of ['icon.svg', 'icon-180.png', 'icon-512.png']) {
+  const src = path.join(__dirname, 'public', f);
+  if (existsSync(src)) copyFileSync(src, path.join(siteDir, f));
+}
+console.log(`Built "${data.crewName}" — ${data.games.length} games (data from ${data.generated}) → site/`);

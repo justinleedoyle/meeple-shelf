@@ -9,6 +9,7 @@
     "seed": "node seed.js",
     "import-sheet": "node import-sheet.js",
     "enrich": "node enrich-images.js",
+    "link-expansions": "node link-expansions.js",
     "snapshot": "node export-snapshot.js",
     "build-page": "node build-page.js",
     "export": "node export-snapshot.js && node build-page.js",

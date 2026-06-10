@@ -34,9 +34,17 @@ To start over with a clean slate, stop the server and delete `data/meeple-shelf.
 - **Crews** — create a crew, get a 6-character invite code, friends join with it. The crew
   page is the combined library: every game anyone owns, with owner badges on each card.
 - **Who has what** — a matrix view (games × members) with color-coded checkmarks, plus
-  filters for player count ("we have 5 tonight"), play time, owner, and title search.
-  Games owned by multiple people are surfaced too — useful for deciding who's allowed
-  to buy the next expansion.
+  filters for player count ("we have 5 tonight"), play time, owner, category, and title
+  search. Games owned by multiple people are surfaced too.
+- **Borrow tracking** — mark where each copy physically is ("Stephensons → Doyles") from
+  the edit modal or the crew's "who owns this?" editor. Loans show on cards everywhere.
+- **Game night picker** — set the filters to tonight's headcount and time budget, hit
+  **🎲 Surprise me**, and let the dice decide (expansions excluded from the roll).
+- **Expansion grouping** — expansions named "Base — Expansion" auto-link to their base
+  game and nest under its card (click "+N expansions" to expand). The matrix shows them
+  indented under the base. Backfill old rows with `npm run link-expansions`.
+- **Installable** — the public page is a PWA: add it to a phone home screen and it opens
+  like an app (works offline with the last-loaded data).
 
 ## How sharing works
 
