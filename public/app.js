@@ -139,6 +139,7 @@ function gameCardHtml(game, { entryId, notes, addedAt, owners, actions } = {}) {
       <div class="card-meta">
         ${players ? `<span class="badge">${players}</span>` : ''}
         ${time ? `<span class="badge">${time}</span>` : ''}
+        ${game.category ? `<span class="badge">${esc(game.category)}</span>` : ''}
       </div>
       ${notes ? `<div class="card-notes">${esc(notes)}</div>` : ''}
       ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}</span>`).join('')}</div>` : ''}
@@ -371,6 +372,7 @@ function openAddModal() {
           <div><label>Min players</label><input type="number" id="m-min" placeholder="2"></div>
           <div><label>Max players</label><input type="number" id="m-max" placeholder="4"></div>
         </div>
+        <label>Category <span style="font-weight:400">(optional)</span></label><input type="text" id="m-category" placeholder="e.g. Party Game, Economic…">
         <label>Cover image URL <span style="font-weight:400">(optional)</span></label><input type="url" id="m-img" placeholder="https://…">
         <label>Notes <span style="font-weight:400">(optional)</span></label><input type="text" id="m-notes" placeholder="e.g. sleeved, expansion included…">
         <div class="form-error" id="m-error"></div>
@@ -445,6 +447,7 @@ function openAddModal() {
         minPlayers: $('#m-min').value || null,
         maxPlayers: $('#m-max').value || null,
         playTime: $('#m-time').value || null,
+        category: $('#m-category').value,
         imageUrl: $('#m-img').value,
         notes: $('#m-notes').value,
       };
@@ -562,12 +565,13 @@ async function viewCrews() {
 
 // ---------- crew detail: the combined library ----------
 
-const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', sort: 'title', view: 'grid' };
+const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid' };
 
 async function viewCrewDetail(id) {
-  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', sort: 'title', view: 'grid' });
+  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid' });
   const { crew, members, games } = await api('/crews/' + id);
   const multiOwned = games.filter((g) => g.owners.length > 1).length;
+  const categories = [...new Set(games.map((g) => g.category).filter(Boolean))].sort();
 
   appEl.innerHTML = `
   <div class="container">
@@ -616,6 +620,13 @@ async function viewCrewDetail(id) {
           ${members.map((m) => `<option value="${m.id}" ${String(crewState.owner) === String(m.id) ? 'selected' : ''}>${esc(m.displayName)}</option>`).join('')}
         </select>
       </div>
+      ${categories.length ? `<div class="filter-group">
+        <span class="glabel">Category</span>
+        <select id="cw-category">
+          <option value="all">All</option>
+          ${categories.map((c) => `<option value="${esc(c)}" ${crewState.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+        </select>
+      </div>` : ''}
       <div class="filter-group">
         <span class="glabel">Sort</span>
         <select id="cw-sort">
@@ -659,6 +670,9 @@ async function viewCrewDetail(id) {
     }
     if (crewState.owner !== 'all') {
       list = list.filter((g) => g.owners.some((o) => String(o.id) === String(crewState.owner)));
+    }
+    if (crewState.category !== 'all') {
+      list = list.filter((g) => g.category === crewState.category);
     }
     if (crewState.sort === 'owners') list.sort((a, b) => b.owners.length - a.owners.length || a.title.localeCompare(b.title));
     else list.sort((a, b) => a.title.localeCompare(b.title));
@@ -706,6 +720,7 @@ async function viewCrewDetail(id) {
   });
   $('#cw-time').onchange = (e) => { crewState.time = e.target.value; renderGames(); };
   $('#cw-owner').onchange = (e) => { crewState.owner = e.target.value; renderGames(); };
+  if ($('#cw-category')) $('#cw-category').onchange = (e) => { crewState.category = e.target.value; renderGames(); };
   $('#cw-sort').onchange = (e) => { crewState.sort = e.target.value; renderGames(); };
   appEl.querySelector('.segmented').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-view]');

@@ -77,6 +77,7 @@ function validateGameInput(body) {
     minPlayers,
     maxPlayers,
     playTime: intOrNull(body.playTime, 1, 6000),
+    category: String(body.category || '').trim().slice(0, 60) || null,
     imageUrl: imageUrl || null,
   };
 }

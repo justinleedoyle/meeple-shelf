@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "import-sheet": "node import-sheet.js",
+    "export": "node export-static.js"
   },
   "engines": {
     "node": ">=18"

@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS games (
   min_players INTEGER,
   max_players INTEGER,
   play_time INTEGER,
+  category TEXT,
   image_url TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -65,6 +66,13 @@ CREATE TABLE IF NOT EXISTS crew_members (
   PRIMARY KEY (crew_id, user_id)
 );
 `);
+
+// migration for databases created before the category column existed
+try {
+  db.exec('ALTER TABLE games ADD COLUMN category TEXT');
+} catch {
+  /* column already exists */
+}
 
 // ---------- auth helpers ----------
 
@@ -116,20 +124,21 @@ export function findOrCreateGame(data) {
   const title = data.title.trim();
   const existing = db.prepare('SELECT * FROM games WHERE title = ? COLLATE NOCASE').get(title);
   if (existing) {
-    db.prepare('UPDATE games SET year = ?, min_players = ?, max_players = ?, play_time = ?, image_url = ? WHERE id = ?')
+    db.prepare('UPDATE games SET year = ?, min_players = ?, max_players = ?, play_time = ?, category = ?, image_url = ? WHERE id = ?')
       .run(
         existing.year ?? data.year ?? null,
         existing.min_players ?? data.minPlayers ?? null,
         existing.max_players ?? data.maxPlayers ?? null,
         existing.play_time ?? data.playTime ?? null,
+        existing.category || data.category || null,
         existing.image_url || data.imageUrl || null,
         existing.id
       );
     return db.prepare('SELECT * FROM games WHERE id = ?').get(existing.id);
   }
   const info = db
-    .prepare('INSERT INTO games (title, year, min_players, max_players, play_time, image_url) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(title, data.year ?? null, data.minPlayers ?? null, data.maxPlayers ?? null, data.playTime ?? null, data.imageUrl || null);
+    .prepare('INSERT INTO games (title, year, min_players, max_players, play_time, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(title, data.year ?? null, data.minPlayers ?? null, data.maxPlayers ?? null, data.playTime ?? null, data.category || null, data.imageUrl || null);
   return db.prepare('SELECT * FROM games WHERE id = ?').get(info.lastInsertRowid);
 }
 
@@ -157,6 +166,7 @@ export function gameToJson(g) {
     minPlayers: g.min_players,
     maxPlayers: g.max_players,
     playTime: g.play_time,
+    category: g.category,
     imageUrl: g.image_url,
   };
 }
