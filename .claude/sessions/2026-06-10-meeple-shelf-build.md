@@ -153,3 +153,13 @@ Nothing — feature-complete as scoped.
   80/80 local, 79/79 prod. Server auto-upgrades new adds (fire-and-forget in POST
   /api/library). npm run enrich chains it. Pages + live app verified serving 500px.
 - Trip correction: Airbnb WITH internet — live app usable there; packed list still nice.
+
+## Phase 10 (same day): photo closet import + bulk add
+- Bulk add tab shipped (paste titles → match → add; deployed to Fly).
+- Read 3 closet photos (HEIC→JPG via sips, rotate, region crops): added 13 base
+  games + 6 expansions to Doyles on PRODUCTION via API. Auto-corrections: "Seti
+  1979" mismatch → SETI: SfEI (2024); "Catan" duplicate row → joined existing
+  "Settlers of Catan". Doyles 39 games; crew 130. Justin had also been adding
+  via owners editor himself (Scythe, Wingspan exps, etc.) — real usage!
+- Finspan expansion: name unconfirmed, awaiting Justin (box label).
+- Naming Q (plural vs singular households): recommended KEEPING plural.
