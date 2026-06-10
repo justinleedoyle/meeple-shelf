@@ -13,12 +13,15 @@ npm install
 npm start          # → http://localhost:3000
 ```
 
-Optional — load demo data (three users with stocked shelves, already in a crew together):
+Load the real household collection (parsed from `data/collection-sheet.md`, a snapshot
+of the shared Google Sheet — 6 households, 109 games, one crew):
 
 ```bash
-npm run seed       # log in as justin / sam / riley — password: meeple123
+npm run import-sheet   # log in as doyles / stephensons / brocks / harris / bells / snowdens
+                       # password: meeple123 (override with PASSWORD=… npm run import-sheet)
 ```
 
+Or load generic demo data instead: `npm run seed` (justin / sam / riley, password `meeple123`).
 To start over with a clean slate, stop the server and delete `data/meeple-shelf.db`.
 
 ## Features
@@ -58,7 +61,24 @@ so the combined view shows one card with both owners rather than duplicates.
   registered access, so the app deliberately has no external API dependency.)
 - `PORT` env var to change the port (auto-increments if busy), `DB_PATH` to relocate the DB.
 
-## Deploying for real friends
+## The GitHub Pages snapshot
+
+GitHub can't run the Node server (Pages is static-only), but `npm run export` renders the
+combined library to `docs/index.html` as a self-contained read-only page — search, player
+count / time / category / owner filters, and the who-has-what matrix all work. Pages serves
+it from `/docs` on `main`, so updating the public page is:
+
+```bash
+npm run export
+git add docs && git commit -m "Refresh shelf snapshot" && git push
+```
+
+Live page: https://justinleedoyle.github.io/meeple-shelf/
+
+To re-import a fresh copy of the Google Sheet, update `data/collection-sheet.md` and rerun
+`npm run import-sheet` (it's idempotent — existing entries are kept, new ✓s become entries).
+
+## Deploying the interactive app for real friends
 
 It runs anywhere Node runs. The only requirement is a persistent disk for the SQLite file:
 
