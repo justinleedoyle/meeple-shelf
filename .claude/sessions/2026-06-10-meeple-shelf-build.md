@@ -234,3 +234,24 @@ Nothing — feature-complete as scoped.
   dueDate/loanedOutAt, .owner-row input[type=checkbox] CSS scoping (critical).
 - Declined 1 finding (heatmap back-swipe at right edge = correct edge-aware
   behavior, symmetric with matrix). Prod smoke: log/verify/delete left 0 plays.
+
+## Phase 16: emoji → stroke icon set, DEPLOYED
+- public/icons.svg: 24-symbol SVG sprite (Lucide-style, 24x24, stroke=currentColor):
+  dice, users, user, clock, alarm, pin, award, crown, trophy, swords, home,
+  menu, globe, clipboard, hash, link, ghost, search, external, backpack,
+  pencil, x, alert, eye.
+- icon(name, cls) helper in app.js + build-page.js template (./icons.svg in
+  static page); ~70 emoji sites replaced across nav, tab bar, card meta,
+  leaderboard (medals gold/silver/bronze, crowns, swords, home host marker),
+  loan badges (pin/alarm), log-play modal (home chips, hash Scores, crown Won),
+  game detail (external links), empty states, crew menu, surprise box.
+- All modal-close buttons converted from text × to icon('x') (+aria-label);
+  ✕ delete-play / sb-close too; 🎉 removed from crew-created modal; favicon
+  now /icon.svg. CSS: .icon base (currentColor, 1.05em) + size/color variants;
+  .modal-close .icon 19px.
+- Kept intentionally: typographic arrows (→ ↳ ↓ ← in loan chips/expansion rows/
+  score dir) and text ✓ (textContent button + matrix cells) — typography, not
+  emoji; render monochrome everywhere.
+- Verified on mobile preview (375x812): crew grid, leaderboard, log-play modal,
+  game detail; sprite fetch OK, 8+ icons per view, zero emoji left. Deployed to
+  Fly (machine v15); live checks: /icons.svg 24 symbols, app.js icon refs OK.
