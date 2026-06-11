@@ -103,11 +103,17 @@ let modalDirty = false; // something changed inside the modal → re-render page
 function openModal(innerHtml) {
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal">${innerHtml}</div></div>`;
   const backdrop = $('.modal-backdrop');
-  backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) closeModal(); });
+  const dismiss = (e) => { if (e.target === backdrop) closeModal(); };
+  backdrop.addEventListener('mousedown', dismiss);
+  backdrop.addEventListener('click', dismiss);
   const x = $('.modal-close', backdrop);
   if (x) x.onclick = closeModal;
   return $('.modal', backdrop);
 }
+
+// focusing inputs on touch devices pops the keyboard over the modal — only
+// auto-focus where a hover-capable pointer (i.e. desktop) is present
+const canAutoFocus = window.matchMedia('(hover: hover)').matches;
 
 function closeModal() {
   if (!modalRoot.innerHTML) return;
@@ -585,7 +591,7 @@ async function openAddModal(ownersCtx = null) {
   }, 300);
 
   $('#game-q').oninput = (e) => doSearch(e.target.value);
-  $('#game-q').focus();
+  if (canAutoFocus) $('#game-q').focus();
 
   resultsEl.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-add]');
@@ -1109,8 +1115,12 @@ async function viewCrewDetail(id) {
         <label>Notes <span style="font-weight:400">(optional)</span></label>
         <input type="text" id="lp-notes" placeholder="e.g. closest game of the trip…">
         <div class="form-error" id="lp-error"></div>
-        <button class="btn btn-primary" id="lp-save" style="margin-top:14px">Log it</button>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn btn-primary" id="lp-save">Log it</button>
+          <button class="btn" id="lp-cancel">Cancel</button>
+        </div>
       </div>`);
+    $('#lp-cancel').onclick = closeModal;
 
     function renderGameArea() {
       const area = $('#lp-game-area');
@@ -1146,7 +1156,7 @@ async function viewCrewDetail(id) {
           selectedGame = games.find((g) => g.id === Number(row.dataset.pick));
           renderGameArea();
         });
-        $('#lp-q').focus();
+        if (canAutoFocus) $('#lp-q').focus();
       }
     }
     renderGameArea();

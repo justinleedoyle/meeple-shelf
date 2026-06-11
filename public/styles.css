@@ -490,11 +490,31 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px 0;
+  gap: 10px;
+  padding: 14px 14px 10px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
 }
 .modal-head h2 { font-size: 19px; }
-.modal-close { color: var(--muted); font-size: 22px; line-height: 1; padding: 4px 8px; border-radius: 8px; }
-.modal-close:hover { color: var(--text); background: var(--card); }
+.modal-close {
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.modal-close:hover { color: var(--text); background: var(--card-hover); }
 .modal-body { padding: 14px 20px 20px; }
 
 /* tabs */
