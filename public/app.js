@@ -165,7 +165,6 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
     </div>
     ${actions ? `<div class="card-actions">
       <button class="icon-btn" data-act="edit" title="Edit details">✎</button>
-      <button class="icon-btn danger" data-act="remove" title="Remove from shelf">✕</button>
     </div>` : ''}
     ${editOwners ? `<div class="card-actions">
       <button class="icon-btn" data-act="owners" title="Edit who owns this">✎</button>
@@ -413,15 +412,7 @@ async function viewLibrary() {
       }
       const card = e.target.closest('[data-entry]');
       const entry = byId.get(card.dataset.entry);
-      if (!entry) return;
-      if (btn.dataset.act === 'remove') {
-        if (!window.confirm(`Remove "${entry.game.title}" from your shelf?`)) return;
-        await api(`/library/${entry.id}`, { method: 'DELETE' });
-        toast(`Removed ${entry.game.title}`);
-        route();
-      } else if (btn.dataset.act === 'edit') {
-        openEditModal(entry);
-      }
+      if (entry && btn.dataset.act === 'edit') openEditModal(entry);
     });
   }
 }
@@ -684,8 +675,19 @@ async function openEditModal(entry) {
       <label>Notes <span style="font-weight:400">(visible on your public shelf)</span></label>
       <input type="text" id="e-notes" value="${esc(entry.notes)}" placeholder="e.g. sleeved, missing a token…">
       <div class="form-error" id="e-error"></div>
-      <button class="btn btn-primary" id="e-save" style="margin-top:14px">Save</button>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="e-save">Save</button>
+        <span class="nav-spacer"></span>
+        <button class="btn btn-ghost btn-danger" id="e-remove">Remove from shelf</button>
+      </div>
     </div>`);
+  $('#e-remove').onclick = async () => {
+    if (!window.confirm(`Remove "${g.title}" from your shelf?`)) return;
+    await api(`/library/${entry.id}`, { method: 'DELETE' });
+    toast(`Removed ${g.title}`);
+    modalDirty = true;
+    closeModal();
+  };
   $('#e-save').onclick = async () => {
     try {
       await api(`/library/${entry.id}`, {
@@ -809,17 +811,20 @@ async function viewCrewDetail(id) {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-primary" id="crew-add-btn">+ Add<span class="seg-txt"> a game</span></button>
-        <button class="btn" id="crew-menu-btn" title="Invite code & crew settings">⋯</button>
+        <button class="btn" id="crew-menu-btn" title="Crew menu">☰ Menu</button>
       </div>
     </div>
 
-    <div class="members-row">
-      ${members.map((m) => `
-        <span class="member" style="--c:${memberColor(m.id)}">
-          <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
-          <span class="m-name">${esc(m.displayName)}</span>
-          <span class="m-count">${m.gameCount}</span>
-        </span>`).join('')}
+    <div class="members-wrap">
+      <div class="members-row" id="members-scroll">
+        ${members.map((m) => `
+          <span class="member" style="--c:${memberColor(m.id)}">
+            <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
+            <span class="m-name">${esc(m.displayName)}</span>
+            <span class="m-count">${m.gameCount}</span>
+          </span>`).join('')}
+      </div>
+      <div class="members-fade" id="members-fade">›</div>
     </div>
 
     <div class="filter-bar" id="cw-toolbar">
@@ -1272,16 +1277,32 @@ async function viewCrewDetail(id) {
     }
   });
 
+  // make the side-scrolling family bar obviously scrollable: a fading edge +
+  // chevron that disappears once you've scrolled to the end
+  {
+    const scroller = $('#members-scroll');
+    const fade = $('#members-fade');
+    const updateFade = () => {
+      fade.style.opacity = scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 8 ? '1' : '0';
+    };
+    scroller.addEventListener('scroll', updateFade, { passive: true });
+    window.addEventListener('resize', updateFade, { passive: true });
+    updateFade();
+  }
+
   $('#crew-menu-btn').onclick = () => {
     openModal(`
       <div class="modal-head"><h2>${esc(crew.name)}</h2><button class="modal-close">×</button></div>
       <div class="modal-body">
-        <p style="color:var(--muted);font-size:14px">Friends join with this invite code:</p>
-        <div class="big-code">${esc(crew.inviteCode)}</div>
-        <button class="btn btn-primary" id="copy-code">Copy code</button>
-        <hr style="border:none;border-top:1px solid var(--line);margin:20px 0">
-        <button class="btn btn-ghost btn-danger" id="leave-btn">Leave crew</button>
+        <button class="btn btn-primary" id="menu-log" style="width:100%;justify-content:center">📝 Log a play</button>
+        <a class="btn" href="https://justinleedoyle.github.io/meeple-shelf/" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin-top:10px">🌐 Public page ↗</a>
+        <h3 style="font-size:12.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 8px">Invite code — friends join with this</h3>
+        <div class="big-code" style="margin-top:0">${esc(crew.inviteCode)}</div>
+        <button class="btn" id="copy-code" style="width:100%;justify-content:center">Copy code</button>
+        <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
+        <button class="btn btn-ghost btn-danger" id="leave-btn" style="width:100%;justify-content:center">Leave crew</button>
       </div>`);
+    $('#menu-log').onclick = () => openLogPlayModal();
     $('#copy-code').onclick = () => copyText(crew.inviteCode);
     $('#leave-btn').onclick = async () => {
       if (!window.confirm(`Leave "${crew.name}"? If you're the last member, the crew is deleted.`)) return;

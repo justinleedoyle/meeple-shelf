@@ -99,8 +99,11 @@ document.getElementById('app').innerHTML = \`
       <div class="sub">The combined board game library · <span class="snapshot-note">read-only snapshot, updated \${DATA.generated}</span></div>
     </div>
   </div>
-  <div class="members-row">
-    \${DATA.members.map((m) => \`<span class="member" style="--c:\${memberColor(m.id)}"><span class="avatar">\${esc(m.displayName.slice(0, 2).toUpperCase())}</span><span class="m-name">\${esc(m.displayName)}</span><span class="m-count">\${m.gameCount}</span></span>\`).join('')}
+  <div class="members-wrap">
+    <div class="members-row" id="members-scroll">
+      \${DATA.members.map((m) => \`<span class="member" style="--c:\${memberColor(m.id)}"><span class="avatar">\${esc(m.displayName.slice(0, 2).toUpperCase())}</span><span class="m-name">\${esc(m.displayName)}</span><span class="m-count">\${m.gameCount}</span></span>\`).join('')}
+    </div>
+    <div class="members-fade" id="members-fade">›</div>
   </div>
   <div class="stats-line">\${DATA.games.length} unique games across \${DATA.members.length} shelves\${multiOwned ? ' · ' + multiOwned + ' owned by more than one household' : ''}</div>
   <div class="filter-bar">
@@ -328,6 +331,17 @@ document.getElementById('surprise-result').addEventListener('click', (e) => {
     b.innerHTML = '';
   }
 });
+
+{
+  const scroller = document.getElementById('members-scroll');
+  const fade = document.getElementById('members-fade');
+  const updateFade = () => {
+    fade.style.opacity = scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 8 ? '1' : '0';
+  };
+  scroller.addEventListener('scroll', updateFade, { passive: true });
+  window.addEventListener('resize', updateFade, { passive: true });
+  updateFade();
+}
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 </script>
