@@ -1,21 +1,21 @@
 {
  "crewName": "Game Night Crew",
- "generated": "2026-06-10",
+ "generated": "2026-06-11",
  "members": [
   {
    "id": 1,
    "displayName": "Stephensons",
-   "gameCount": 73
+   "gameCount": 71
   },
   {
    "id": 2,
    "displayName": "Brocks",
-   "gameCount": 58
+   "gameCount": 57
   },
   {
    "id": 3,
    "displayName": "Harris",
-   "gameCount": 26
+   "gameCount": 24
   },
   {
    "id": 4,
@@ -44,6 +44,9 @@
    "category": "Civilization",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/35h9Za_JvMMMtx_92kT0Jg__medium/img/WCIYZsFjih6cqqClJ0o4iKxsm1Q=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7149798.jpg",
+   "bggId": 68448,
+   "websiteUrl": "http://rprod.com/index.php?page=description-22",
+   "description": "You are the leader of one of the 7 great cities of the Ancient World. Gather resources, develop commercial routes, and affirm your military supremacy. Build your city and erect an architectural wonder which will transcend future times.\n7 Wonders lasts three ages. In each age, players receive seven cards from a particular deck, choose one of those cards, then pass the remainder to an adjacent player. Players reveal th …",
    "owners": [
     {
      "id": 2,
@@ -67,6 +70,9 @@
    "category": "Dice",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/FJtnBtuDIkRO95pGLSd5aA__medium/img/2lXkjMsrGMq6gCKyUKnMEMcWiK4=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8871909.jpg",
+   "bggId": 446231,
+   "websiteUrl": "https://www.rprod.com/en/games/7-wonders-dice",
+   "description": "Guide one of the seven largest cities of antiquity to prosperity in 7 Wonders Dice. During the game, you will construct a wonder that defies time, make scientific advances, develop commerce, manage your resources, and handle your gold reserve prudently — all while keeping an eye on neighboring cities since ignoring them has a heavy price!\nA game plays over a series of turns during which you will use dice to construct …",
    "owners": [
     {
      "id": 4,
@@ -85,6 +91,9 @@
    "category": "Civilization",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/zdagMskTF7wJBPjX74XsRw__medium/img/Zt_a9HMZdJYykT9Px6L3-Hpk7y8=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2576399.jpg",
+   "bggId": 173346,
+   "websiteUrl": "https://www.rprod.com/en/games/7-wonders-duel",
+   "description": "In many ways 7 Wonders Duel resembles its parent game 7 Wonders. Over three ages, players acquire cards that provide resources or advance their military or scientific development in order to develop a civilization and complete wonders. What's different about 7 Wonders Duel is that, as the title suggests, the game is solely for two players.\nPlayers do not draft cards simultaneously from decks of cards, but from a disp …",
    "owners": [
     {
      "id": 2,
@@ -108,6 +117,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/M_7UvwZvuxBVjxdadsa5AA__medium/img/0Z2gtL99ZvdPOfUOn_alW_ZKs8U=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1077906.jpg",
+   "bggId": 103343,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/a-game-of-thrones-the-board-game-second-edition/",
+   "description": "Game description from the publisher:\nKing Robert Baratheon is dead, and the lands of Westeros brace for battle.\nIn the second edition of A Game of Thrones: The Board Game, three to six players take on the roles of the great Houses of the Seven Kingdoms of Westeros, as they vie for control of the Iron Throne through the use of diplomacy and warfare. Based on the best-selling A Song of Ice and Fire series of fantasy no …",
    "owners": [
     {
      "id": 6,
@@ -126,6 +138,9 @@
    "category": "Trivia",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/BXu-cXVP7kDMdVctrEuhvA__medium/img/P2Sc5Bu98fXlL0S3amqdtr7cTVk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2860338.jpg",
+   "bggId": 192297,
+   "websiteUrl": "http://www.sahmreviews.com/2016/08/bezier-games-america-terra.html",
+   "description": "In which year was Close Encounters first in theaters?\nWhich state gets the most snow each year?\nHow many albums has Madonna sold?\nIt's likely that you don't know any of these facts, but you might have a rough idea, and that's good enough because America is a party game in which being close counts. And what if you have absolutely no idea what the answer is? Take advantage of your friends who do know. And if you realiz …",
    "owners": [
     {
      "id": 1,
@@ -144,6 +159,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/dT1vJbUizZFmJAphKg-byA__medium/img/DSZFTnkZPDbbqoJjvvhDZ8b4WS4=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7720813.png",
+   "bggId": 400314,
+   "websiteUrl": "https://stonemaiergames.com/games/apiary/",
+   "description": "In a far-distant future, humans no longer inhabit Earth. The cause of their disappearance (or perhaps their demise) is unknown, but their absence left a void ready to be filled by another sentient species.\nOver the span of untold generations, one species of the humble honeybee evolved to fill that void. They grew in size and intelligence to become a highly advanced society. They call themselves Mellifera, and they ha …",
    "owners": [
     {
      "id": 6,
@@ -162,6 +180,9 @@
    "category": "Abstract Strategy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/aPSHJO0d0XOpQR5X-wJonw__medium/img/8a3bJmojDpQSh97GOBMSDIjP6Y8=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6973671.png",
+   "bggId": 230802,
+   "websiteUrl": "https://planbgames.com/next-move/azul-next-move-games-michael-kiesling-strategy-abstract-board-game-winner-spiel-des-jahres-game-of-the-year-cannes-portuguese-tiles-royal-palace-of-evora-5",
+   "description": "Introduced by the Moors, azulejos (originally white and blue ceramic tiles) were fully embraced by the Portuguese when their king Manuel I, on a visit to the Alhambra palace in Southern Spain, was mesmerized by the stunning beauty of the Moorish decorative tiles. The king, awestruck by the interior beauty of the Alhambra, immediately ordered that his own palace in Portugal be decorated with similar wall tiles. As a t …",
    "owners": [
     {
      "id": 1,
@@ -180,6 +201,9 @@
    "category": "Movies / TV / Radio theme",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/wjJsquLxPJc2WmvJ7SqVbQ__medium/img/-5EYMYW3MNlFdbUFFNhD939PTUo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5240569.png",
+   "bggId": 302388,
+   "websiteUrl": "https://www.funko.com/shop/details/back-to-the-future-back-in-time-strategy-game",
+   "description": "\"Wait a minute, Doc, are you telling me you built a time machine...out of a DeLorean?\"\nThe photo of the McFly family is slowly fading... It's 1955, and you're wrapped up in a time paradox with Biff, Lorraine, George, and Doc Brown! Cooperate to move around Hill Valley to get the DeLorean ready, avoid Biff and his gang, help George and Lorraine fall in love, and crank the DeLorean up to 88 MPH — all just in time for t …",
    "owners": [
     {
      "id": 1,
@@ -198,6 +222,9 @@
    "category": "American West",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/_04xA-d-rfygm0c49HE4vA__medium/img/QdW6jmFUE_RdwqOo_dCcCVSyfaY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1170986.jpg",
+   "bggId": 3955,
+   "websiteUrl": "http://www.dvgiochi.com/giochi/bang/?id=1",
+   "description": "\"The Outlaws hunt the Sheriff. The Sheriff hunts the Outlaws. The Renegade plots secretly, ready to take one side or the other. Bullets fly. Who among the gunmen is a Deputy, ready to sacrifice himself for the Sheriff? And who is a merciless Outlaw, willing to kill him? If you want to find out, just draw (your cards)!\" (From back of box)\nThe card game BANG! recreates an old-fashioned spaghetti western shoot-out, with …",
    "owners": [
     {
      "id": 3,
@@ -216,6 +243,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 7,
    "imageUrl": "https://cf.geekdo-images.com/omqNXDxHuFcizPoSm79ADA__medium/img/QNRIAsOh9a0qEkhUQSQkrQytnVo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3835714.jpg",
+   "bggId": 30933,
+   "websiteUrl": null,
+   "description": "BANG! The Bullet! is the deluxe version of BANG! and its expansions. Coming in a deluxe bullet-'box' it contains:\n- BANG! - Third Edition with reworked cards and rules\n- Dodge City - Second Edition with reworked cards and characters\n- High Noon - Second Edition\n- High Noon II (A Fistful Of Cards) - Second Edition\n- Two new exclusive High Noon cards - \"New Identity\" and \"Handcuffs\"\n- Three new characters - Uncle Will, …",
    "owners": [
     {
      "id": 3,
@@ -234,6 +264,9 @@
    "category": "Abstract Strategy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/CyRdRpZaIsCb4B8zfotI4Q__medium/img/sJszOc0nINN4oMbUczBNDJrwivA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1887253.jpg",
+   "bggId": 54137,
+   "websiteUrl": "https://www.blueorangegames.com/games/battle-sheep",
+   "description": "In Battle Sheep (first released as Splits), players start the game by constructing the board from identical four-hex tiles, then each player places his/her tall stack of discs on one of the border hexes. Players take turns removing some number of discs from the top of one of their stacks, moving that new stack of discs as far away as it can go in a straight line. Players must leave at least one disc behind when movin …",
    "owners": [
     {
      "id": 4,
@@ -252,6 +285,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/tO7bJhC0dYW2ofKaf4YMSg__medium/img/lu08Bo7zFAqM1WzuWPwykWoYksQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic170899.jpg",
+   "bggId": 2688,
+   "websiteUrl": null,
+   "description": "\"Adapted From The Dazzling TV Series On ABC\nYou're a Colonial Viper pilot assigned to capture a disabled Cylon Raider and tow it to the Battlestar Galactica.\"\n-from game box\nEach player must move his ship to the center of the board to pick up the disabled enemy ship and return it to their base. Your opponents will challenge you in battle to gain control. The game has black holes to transport you across the board, for …",
    "owners": [
     {
      "id": 6,
@@ -275,6 +311,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 10,
    "imageUrl": "https://cf.geekdo-images.com/gIFO3gX6AxkdLZMK2vfZtA__medium/img/tIgMXWxt_77tzAi80R7KBQK34kY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic512021.jpg",
+   "bggId": 43539,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/battlestar-galactica/products/pegasus-expansion/",
+   "description": "The first expansion for Battlestar Galactica: The Board Game, Pegasus adds two new supplemental game boards featuring the Battlestar Pegasus and the planet New Caprica, seven new characters, two plastic Basestars, as well as new Destination, Crisis, Loyalty, Quorum, Super Crisis, and Skill cards.\nThe new Pegasus board can be used by itself or together with the New Caprica board to create the game you desire – the Peg …",
    "owners": [
     {
      "id": 6,
@@ -293,6 +332,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/3esMv2fRjFZHNM8IbGG-kw__medium/img/3ITTrhAI60FZMBMVChHQBYzoRTA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4163219.jpg",
+   "bggId": 254188,
+   "websiteUrl": "https://theop.games/products/game/blank-slate/",
+   "description": "Each round in Blank Slate, pick one of the 250+ word cue cards (which have 500+ total cues) and reveal it. Each player then writes the word they think best completes the phrase, trying to exactly match another player's word without giving a single hint.",
    "owners": [
     {
      "id": 1,
@@ -311,6 +353,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/OixUz80u_9uHo2cax1hjIw__medium/img/7REeLxrzSQFhY1NMTR5-JiweLEQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6348636.png",
+   "bggId": 272438,
+   "websiteUrl": null,
+   "description": "Blockbuster is a movie game for anyone who has seen a movie, and like all the best films it comes in two parts:\nIn the Movie Buzzer Battle, both teams are given a topic, such as \"Movies with dogs\". You start the 15-second timer, yell out a relevant movie, then whack the buzzer to reset the time. The other team is now in the hot seat and has to do the same. Whoever runs out of time hands the advantage to the other tea …",
    "owners": [
     {
      "id": 6,
@@ -329,6 +374,9 @@
    "category": "Abstract Strategy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/96YA5wUJDxtPkmPxemr5Qg__medium/img/j2FdCHneka2ugfPZ11WX08-jV_o=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2197702.jpg",
+   "bggId": 2453,
+   "websiteUrl": null,
+   "description": "Blokus (officially pronounced \"Block us\") is an abstract strategy game with transparent, Tetris-shaped, colored pieces that players are trying to play onto the board. The only caveat to placing a piece is that it may not lie adjacent to your other pieces, but instead must be placed touching at least one corner of your pieces already on the board.\nThere is a solitaire variation where one player tries to get rid of all …",
    "owners": [
     {
      "id": 2,
@@ -357,6 +405,9 @@
    "category": "Movies / TV / Radio theme",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/I0dO3GEStulLd88B7NHavw__medium/img/8G7mZODsBD4M2DWRLPRC6egjFco=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3652437.jpg",
+   "bggId": 231696,
+   "websiteUrl": null,
+   "description": "If you want to paint with Bob Ross, you need to be chill, so whoever reaches maximum chill first in Bob Ross: Art of Chill Game wins.\nIn the game, each player starts with three art supplies cards, with each card showing one of seven paints and one of four tools. (Some cards are jokers that serve as any color, but no tool.) Take one of the large double-sided painting cards, place it on the easel, and place Bob on the …",
    "owners": [
     {
      "id": 1,
@@ -375,6 +426,9 @@
    "category": "Economic",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/x3zxjr-Vw5iU4yDPg70Jgw__medium/img/9wVrtaYtTdh_FeISZkFa4wDEUrk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3490053.jpg",
+   "bggId": 224517,
+   "websiteUrl": "https://roxley.com/products/brass-birmingham-deluxe-edition",
+   "description": "Brass: Birmingham is an economic strategy game sequel to Martin Wallace's 2007 masterpiece, Brass. Brass: Birmingham tells the story of competing entrepreneurs in Birmingham during the industrial revolution between the years of 1770 and 1870.\nIt offers a very different story arc and experience from its predecessor. As in its predecessor, you must develop, build and establish your industries and network in an effort t …",
    "owners": [
     {
      "id": 2,
@@ -398,6 +452,9 @@
    "category": "Abstract Strategy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/qGkU6XsF1448F_A4P8TY5Q__medium/img/YwzPfBg7c4t4z4Q6OfgshB97Rl4=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8124431.jpg",
+   "bggId": 283155,
+   "websiteUrl": "https://www.flatout.games/calico",
+   "description": "Calico is a puzzly tile-laying game of quilts and cats.\nIn Calico, players compete to sew the coziest quilt as they collect and place patches of different colors and patterns. Each quilt has a particular pattern that must be followed, and players are also trying to create color and pattern combinations that are not only aesthetically pleasing, but also able to attract the cuddliest cats!\nTurns are simple. Select a si …",
    "owners": [
     {
      "id": 4,
@@ -421,6 +478,9 @@
    "category": "Racing",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/jVr1bGBQpshqVPcwvZ7CPg__medium/img/BkJRcZm4fWLNWGSI5vuu4vPoxAw=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1918028.jpg",
+   "bggId": 153938,
+   "websiteUrl": "https://www.eggertspiele.de/camel-up/",
+   "description": "In Camel Up, up to eight players bet on five racing camels, trying to suss out which will place first and second in a quick race around a pyramid. The earlier you place your bet, the more you can win — should you guess correctly, of course. Camels don't run neatly, however, sometimes landing on top of another one and being carried toward the finish line. Who's going to run when? That all depends on how the dice come …",
    "owners": [
     {
      "id": 1,
@@ -439,6 +499,9 @@
    "category": "Mature / Adult",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/nYLrPiI9gnvlrwOrKQ4_CA__medium/img/4t2R2dePAWt598YCbQ0BLjM3QvI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2909692.jpg",
+   "bggId": 50381,
+   "websiteUrl": "http://cardsagainsthumanity.com/",
+   "description": "A party game for horrible people.\nIn Cards Against Humanity, play begins with a judge, known as the \"Card Czar\", choosing a black question or fill-in-the-blank card from the top of the deck and showing it to all players. Each player holds a hand of ten white answer cards at the beginning of each round, and passes a card (sometimes two) to the Card Czar, face-down, representing their answer to the question on the card …",
    "owners": [
     {
      "id": 6,
@@ -462,6 +525,9 @@
    "category": "Medieval",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/sH2YTQ10dHj1ibfS-KKtGA__medium/img/fTsb74IfCSKb-JQRHgwWhO6g0Kg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8745814.jpg",
+   "bggId": 84876,
+   "websiteUrl": null,
+   "description": "The game is set in the Burgundy region of High Medieval France. Each player takes on the role of an aristocrat, originally controlling a small princedom. While playing they aim to build settlements and powerful castles, practice trade along the river, exploit silver mines, and use the knowledge of travelers. The game is about players taking settlement tiles from the game board and placing them into their princedom wh …",
    "owners": [
     {
      "id": 4,
@@ -477,11 +543,6 @@
      "id": 3,
      "displayName": "Harris",
      "loanedToName": null
-    },
-    {
-     "id": 1,
-     "displayName": "Stephensons",
-     "loanedToName": null
     }
    ]
   },
@@ -495,6 +556,9 @@
    "category": "Medieval",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/JUrmY8GgFPQlENiPT7BGZw__medium/img/BVqXGen5oj9x2thLsn7rE9RE_DI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6884563.jpg",
+   "bggId": 363622,
+   "websiteUrl": "https://awakenrealms.com/games/awaken-realms/castles-of-burgundy",
+   "description": "Castles of Burgundy is a legendary Board Game design created by Stefan Feld. In this 1-4 players tabletop experience, you will take on the role of an aristocrat controlling a small princedom. Trying to build a settlement with powerful castles, practice trades, exploit silver mines, and use the knowledge of travelers.\nNow, this timeless game is coming back with an extremely polished, high-end special edition resulting …",
    "owners": [
     {
      "id": 1,
@@ -513,6 +577,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/Ttbcf-bpqawNpqB5zp28Gw__medium/img/YvEcPiQUiuuPAIzo2_tJ8xqqglE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic173485.jpg",
+   "bggId": 192092,
+   "websiteUrl": null,
+   "description": "Say what you see in this fast-paced family card game based on the hit TV show. Go head-to-head with your opponent to see who will be crowned Catch Phrase champion!\nOne player is the host, and reveals a card to the other players. They then have to identify the familiar phrase represented by the picture on the card. The first player to identify the catchphrase adds the card to their pile. Each card has a monetary value …",
    "owners": [
     {
      "id": 2,
@@ -531,6 +598,9 @@
    "category": "Trivia",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/ZE3emXajOJtAD_1jUS4B_g__medium/img/4EnEpauyFT1OoMhi2PkpSRdCxGo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4107466.jpg",
+   "bggId": 43856,
+   "websiteUrl": null,
+   "description": "Were ice cream cones invented before or after silver dollars? Did the first drive-in movie come before or after \"The Star Spangled Banner\" is declared the National Anthem? Now you're playing Chronology, the challenging time line game. Place events in time and put time in its place. Place 5 events in order and win the game. Includes 200 Chronology cards, card stands and instructions.\nThis 2008 version of the game cont …",
    "owners": [
     {
      "id": 5,
@@ -549,6 +619,9 @@
    "category": "City Building",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/6_OCm7GyUcpGMfxbBzEDPA__medium/img/IIFz068cbHX97ffD9KDfgmYxcTc=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4792770.jpg",
+   "bggId": 267370,
+   "websiteUrl": "https://store.thamesandkosmos.com/collections/board-games/products/cities-skylines",
+   "description": "Cities: Skylines – The Board Game is a co-operative game based on the popular computer game of the same name by Paradox Interactive.\nGameplay starts with four land boards being visible, the exact number varying depending on the scenario. The goal is to finish a number of milestones and to make the inhabitants of your city happy. At the start of each milestone, one additional board is bought, flipped over from its nat …",
    "owners": [
     {
      "id": 1,
@@ -567,6 +640,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/S0GM2Mxfh8Tmvsdeog0W0g__medium/img/ZzDWyCLyqvkIWZ4PI-adqDhwPuk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3764168.jpg",
+   "bggId": 233247,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/sid-meiers-civilization-a-new-dawn/",
+   "description": "Description from the publisher:\nSid Meier's Civilization: A New Dawn is a strategy board game in which two to four players act as the rulers of history's most memorable empires. Over the course of the game, players will expand their domains, gain new technologies, and build many of humanity's greatest wonders. In the end, one nation will rise above all others to leave its indelible mark upon history.\nThis new game pr …",
    "owners": [
     {
      "id": 6,
@@ -585,6 +661,9 @@
    "category": "Murder / Mystery",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/wNcbhLJGGjakYjjm1gV_kQ__medium/img/Gkyf-epD8zl4tr_5-W1_YuyuwY0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7563466.png",
+   "bggId": 154633,
+   "websiteUrl": null,
+   "description": "Traditional Clue board game with modernized graphics in the \"Mansion\" board and a boardwalk/beach scene on the opposite side of the board. Gameplay has been updated as well with the \"Boardwalk\" scene incorporating 3 red cards which are placed in assigned spots on the board for players to obtain. These cards allow special plays:\n1. Take a card from each player, mark it on your clue sheet, and return to players.\n2. Cho …",
    "owners": [
     {
      "id": 6,
@@ -608,6 +687,9 @@
    "category": "Word Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/nC6ifPCDnAItwoKSKXVrnw__medium/img/GIEan3lMQ6623CFXBKQ6hRB7nqs=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8907965.jpg",
+   "bggId": 178900,
+   "websiteUrl": "http://czechgames.com/en/codenames/",
+   "description": "Two rival spymasters know the secret identities of 25 agents. Their teammates know the agents only by their codenames — single-word labels like \"disease\", \"Germany\", and \"carrot\". Yes, carrot. It's a legitimate codename. Each spymaster wants their team to identify their agents first...without uncovering the assassin by mistake.\nIn Codenames, two teams compete to see who can make contact with all of their agents first …",
    "owners": [
     {
      "id": 6,
@@ -636,6 +718,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/zYE_qfgGOPHH9cKY_OY4fA__medium/img/S6pukPJQ2fWNmj8TEqch9ULdPy4=/fit-in/500x500/filters:no_upscale():strip_icc()/pic336536.jpg",
+   "bggId": 2604,
+   "websiteUrl": null,
+   "description": "Play is in teams of two. Each person has a deck of picture cards. Each deck has the same set of pictures. There is also a deck of word cards with words like \"marriage\", \"de facto\", and \"pimple\".\nA word is chosen and each player chooses 2-5 cards from his/her deck. Teams score points for choosing the same pictures, and score extra points for putting the pictures in the same order (from most to least important).\nThe bo …",
    "owners": [
     {
      "id": 2,
@@ -654,6 +739,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/CzwSm8i7tkLz6cBnrILZBg__medium/img/UjQ_vYlTsoZFMJ2Eu9OvFwi2_bM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3453267.jpg",
+   "bggId": 124361,
+   "websiteUrl": "https://www.riograndegames.com/games/concordia/",
+   "description": "Two thousand years ago, the Roman Empire ruled the lands around the Mediterranean Sea. With peace at the borders, harmony inside the provinces, uniform law, and a common currency, the economy thrived and gave rise to mighty Roman dynasties as they expanded throughout the numerous cities. Guide one of these dynasties and send colonists to the remote realms of the Empire; develop your trade network; and appease the anc …",
    "owners": [
     {
      "id": 2,
@@ -672,6 +760,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/dQiQjpVa7mGbyAmrmQsQIA__medium/img/_fRlXnxugyhDZiklFDXtbmMiCLE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8689177.jpg",
+   "bggId": 121193,
+   "websiteUrl": "https://www.grandpabecksgames.com/products---cover-your-assets",
+   "description": "The stakes are high in this high-energy, competitive, and cut-throat, set-collection card game from Grandpa Beck's Games!\nIn Cover Your Assets, players compete to become the first millionaire by building towers of matching sets made from 10 different types of asset cards (things like jewels, piggy banks, classic autos, and more). Each new set that is created is stacked crosswise on top of the previous set, covering, …",
    "owners": [
     {
      "id": 2,
@@ -690,6 +781,9 @@
    "category": "Environmental",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/YU8rm_FMnKHS2GPDFvLb6g__medium/img/GyujiGPjkN57_G0td0-B2e2FIkA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7068528.png",
+   "bggId": 334986,
+   "websiteUrl": "https://www.daybreakgame.org/",
+   "description": "Daybreak is a co-operative game about climate action. Each player controls a world power, deploying policies and technologies to both dismantle the engine of global heating and to build resilient societies that protect people from life-threatening crises.\nIf the global temperature gets too high, or if too many people from any world power are in crisis, everyone loses. But if you work together to draw down global emis …",
    "owners": [
     {
      "id": 1,
@@ -708,6 +802,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/wpWzYeX4dg5TgNdR9OsxAg__medium/img/buBbtUHcDm7pgq8sd3LolmwUXSo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2906832.jpg",
+   "bggId": 193037,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/dead-of-winter/products/long-night/",
+   "description": "Dead of Winter: The Long Night is a standalone expansion for Dead of Winter: A Crossroads Game that introduces the Raxxon location where horrible experiments will spill out into the town unless players can contain them.\nThe game has players at a new colony location trying to survive with new survivors against brand new challenges. Can you handle being raided by members of other colonies? Will you explore more and unr …",
    "owners": [
     {
      "id": 6,
@@ -726,6 +823,9 @@
    "category": "Deduction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/hHZWXnUTMYDd_KTAM6Jwlw__medium/img/R81Frg1sWSyRZ1gdcMnaQQGI-gQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3759421.jpg",
+   "bggId": 225694,
+   "websiteUrl": "https://www.hachetteboardgames.com/products/decrypto",
+   "description": "Players compete in two teams in Decrypto, with each trying to correctly interpret the coded messages presented to them by their teammates while cracking the codes they intercept from the opposing team.\nIn more detail, each team has its own screen, and in this screen they tuck four cards in pockets numbered 1-4, letting everyone on the same team see the words on these cards while hiding the words from the opposing tea …",
    "owners": [
     {
      "id": 4,
@@ -744,6 +844,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/RAaKHdR-UqEN2Xd-j4NhNw__medium/img/AoXvWbdw9JJsvM-jS_vqDSpgSjM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4332309.jpg",
+   "bggId": 202077,
+   "websiteUrl": "https://www.facebook.com/deepmadnessgame",
+   "description": "In a dark and claustrophobic deep sea mining site, the uncovering of a mysterious “Sphere” is dragging everyone nearby into the endless madness. The fears deep within one’s mind are amplified and transformed into horrifying monsters from other dimensions, torturing one's body and testing their sanity. Only those with extraordinary will and conviction can escape its devastating grasp.\nDeep Madness is a fully cooperati …",
    "owners": [
     {
      "id": 6,
@@ -762,6 +865,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 118,
    "imageUrl": "https://cf.geekdo-images.com/7bhcCbP9ZUOYCGR52froHg__medium/img/wSeDrXsRteDiBWpKGJKWK7vOfs4=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4332312.jpg",
+   "bggId": 221421,
+   "websiteUrl": null,
+   "description": "Deep Madness: Endless Nightmares is an expansion for Deep Madness. It was originally announced as three separate items, called Fathoms Dark, Fevered Dreams and Expectant Terrors.\nThere is more to the story. There are other investigators descending to the depths. There are new monsters being birthed from the sphere’s roiling horrors. New chapters are creeping out of the darkness, and endless fresh nightmares are crouc …",
    "owners": [
     {
      "id": 6,
@@ -780,6 +886,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 118,
    "imageUrl": "https://cf.geekdo-images.com/hVB6DsDFyOn1t5JEjFbGig__medium/img/BHSk65hbeDVsVw5O0otyKX8Wy_E=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4332316.jpg",
+   "bggId": 222586,
+   "websiteUrl": null,
+   "description": "How many horrors can be fit into one box? Let’s find out.\nUncounted Horrors contains all of the Kickstarter-exclusive content unlocked during the Deep Madness campaign. It includes the limited-edition investigators, monsters, search cards, items and markers. In addition, it holds the “True Ending” scenario, which includes its own story and a new room tile.",
    "owners": [
     {
      "id": 6,
@@ -798,6 +907,9 @@
    "category": "Dice",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/4BTVGQWO0M9ayxyku3FW6Q__medium/img/RGzfYG2ruM1Z58UWomqeZ5Bq2dY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3477004.jpg",
+   "bggId": 194594,
+   "websiteUrl": "http://www.libellud.com/dice-forge/",
+   "description": "Heroes, stand ready! The gods are offering a seat in heaven to whichever hero defeats their rivals. Your courage and wits will be your most precious allies as you use divine dice to gather resources along the road to victory.\nYour divine dice are exceptional, with removable faces! Customize your dice to make them more powerful as the game progresses. Sacrifice gold to the gods to obtain enhanced die faces. Upgrade yo …",
    "owners": [
     {
      "id": 4,
@@ -826,6 +938,9 @@
    "category": "Trivia",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/4AwjQ_QQfoPA0DhtwDK9Gg__medium/img/GPDZu7pcvbr_FUWyLzlDqeFhzH0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7626864.jpg",
+   "bggId": 395369,
+   "websiteUrl": null,
+   "description": "Celebrate the magic of Disney history with Disney Chronology! Test your Disney knowledge with this iconic game of time that celebrates key moments of Disney’s 100-year history. Guess where in your timeline each Disney event occurs. Did Beauty and the Beast open on Broadway before or after Frozen was released? Disney Chronology is simple, addictive, educational and a fun way to learn about Disney history. Features 150 …",
    "owners": [
     {
      "id": 5,
@@ -844,6 +959,9 @@
    "category": "Card Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/j6iQpZ4XkemZP07HNCODBA__medium/img/QYiEmwPYIy5X6-LZZveuOrwdxZ0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic394356.jpg",
+   "bggId": 64777,
+   "websiteUrl": null,
+   "description": "Dominion is played on a 8 8 square board.\nOn each turn, each player must do one of the following things:\nDrop a stone on a empty cell.\nJump a stone to an empty cell.\nPass its turn if he cannot drop or jump.\nWhen all cells are occupied, the player with more stones wins.",
    "owners": [
     {
      "id": 2,
@@ -867,6 +985,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/BXQGkYJqPy-oNWhbX0hXgw__medium/img/LPTPf2loHt3CALB4cEDKXirIAcE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3435888.jpg",
+   "bggId": 193436,
+   "websiteUrl": "http://www.inspirationplay.com/double-ditto.html",
+   "description": "Double Ditto is a fun party game what will challenge players to be clever and quick. Play with as few as 4 players, or as may as 10 or more!\nTake turns being the Ditto Master by reading a card out loud to the group. Players then have 15 seconds to write down two answers that come to mind. Once time is up, take turns reading the answers out loud, crossing off each answer that matches another player's answer.\nThe objec …",
    "owners": [
     {
      "id": 1,
@@ -885,6 +1006,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/npY6grU545xPiRkCAmcdSA__medium/img/b9QnKNVKnjXkiaAV9hT3ELNbpaU=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2401338.jpg",
+   "bggId": 172933,
+   "websiteUrl": "http://www.gamewright.com/gamewright/index.php?section=games&page=game&show=298#",
+   "description": "Game description from the publisher:\nDare to enter Dragonwood! Deep in the heart of this mythical forest lurk angry ogres, giggling goblins, and even the famed and fearsome fire-breathers themselves!\nIn Dragonwood, you collect sets of adventurer cards to earn dice, which you then use to roll against your foes. Stomp on some fire ants, scream at a grumpy troll, or strike the menacing orange dragon with a magical silve …",
    "owners": [
     {
      "id": 2,
@@ -903,6 +1027,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/nSjPo2DiZftBXbwuGvuhEQ__medium/img/IZvU10XV6xyXPh1BaQmFLO6pTac=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6269064.jpg",
+   "bggId": 341165,
+   "websiteUrl": "https://www.gf9games.com/dune/743/dune-a-game-of-conquest-diplomacy/",
+   "description": "Take part in one of the most famous science-fiction stories of all time. Dune: A Game of Conquest and Diplomacy builds on 40 years of development, refinement, and evolution from the original classic game. It has the same beloved DNA, flavor, tension, and themes, but with new game-board design, more spice, new streamlined rules, and a new market deck from which you can purchase game advantages. Also, the brand new two …",
    "owners": [
     {
      "id": 3,
@@ -921,6 +1048,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/PhjygpWSo-0labGrPBMyyg__medium/img/GTdRflITsEf3cn1yILTJ2_tLyhM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5666597.jpg",
+   "bggId": 316554,
+   "websiteUrl": "https://www.direwolfdigital.com/dune-imperium/",
+   "description": "Dune: Imperium is a game that uses deck building to add a hidden information angle to traditional worker placement. It finds inspiration in elements and characters from the Dune legacy, both the new film from Legendary Pictures and the seminal literary series from Frank Herbert, Brian Herbert, and Kevin J. Anderson.\nAs a leader of one of the Great Houses of the Landsraad, raise your banner and marshal your forces and …",
    "owners": [
     {
      "id": 2,
@@ -939,6 +1069,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/UVUkjMV_Q2paVUIUP30Vvw__medium/img/8gYBTuaNg07JEmE_GGhUkqL_OZs=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7664424.jpg",
+   "bggId": 397598,
+   "websiteUrl": "https://www.direwolfdigital.com/dune-imperium-uprising/",
+   "description": "In Dune: Imperium Uprising, you want to continue to balance military might with political intrigue, wielding new tools in pursuit of victory. Spies will shore up your plans, vital contracts will expand your resources, or you can learn the ways of the Fremen and ride mighty sandworms into battle!\nDune: Imperium Uprising is a standalone spinoff to Dune: Imperium that expands on that game's blend of deck-building and wo …",
    "owners": [
     {
      "id": 2,
@@ -957,6 +1090,9 @@
    "category": "Environmental",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/0xqF_KyOb7V26Lu5YT3fxw__medium/img/JqDPrIaj9ucWWByjM0b6-AwJB_o=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6699821.jpg",
+   "bggId": 350184,
+   "websiteUrl": "https://insideupgames.com/our-games/earth-board-game/",
+   "description": "Earth is a tableau builder with simple rules and countless strategic possibilities. With its encyclopedic nature and a near-infinite number of tableau combinations, every single game will allow you to discover new synergies and connections, just as our vast and fascinating world allows us to do!\nIt’s time to jump into these rich environments and create some amazing natural synergies that replicate and extrapolate on …",
    "owners": [
     {
      "id": 4,
@@ -985,6 +1121,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/fjE7V5LNq31yVEW_yuqI-Q__medium/img/42-CeePMTGmMtkkt0W4zpb4uCVw=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3918905.png",
+   "bggId": 199792,
+   "websiteUrl": "https://www.tabletoptycoon.com/products/everdell-standard-edition-3rd-edition",
+   "description": "Within the charming valley of Everdell, beneath the boughs of towering trees, among meandering streams and mossy hollows, a civilization of forest critters is thriving and expanding. From Everfrost to Bellsong, many a year have come and gone, but the time has come for new territories to be settled and new cities established. You will be the leader of a group of critters intent on just such a task. There are buildings …",
    "owners": [
     {
      "id": 2,
@@ -1003,6 +1142,9 @@
    "category": "Adventure",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/9eBww9iAi472T2goijVqwQ__medium/img/RxoznfZJw6MRk--iqRCpG1RT8yo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7320023.jpg",
+   "bggId": 379078,
+   "websiteUrl": "https://stonemaiergames.com/games/expeditions/",
+   "description": "The sequel to Scythe sends players on a new adventure into Siberia, where a massive meteorite crashed near the Tunguska River, awakening ancient corruption. An expedition led by Dr. Tarkovsky ventures into the taiga to learn about the meteorite and its impact on the land. Itching for adventure, heroes from the war privately fund their own expeditions to Siberia, hoping to find artifacts, overcome challenges, and ulti …",
    "owners": [
     {
      "id": 4,
@@ -1021,6 +1163,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/7lB9FEqUi0mLaUCCkuyKGg__medium/img/MviF2nF5V9D64AgI9MnFbHAiBnA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1767884.jpg",
+   "bggId": 144066,
+   "websiteUrl": null,
+   "description": "Two teams of players alternate trying to match answers to survey questions much like the classic tv game show, except where one team controls each question, in Strikeout, teams alternate giving answers, trying to be the one who matches the last correct answer before striking out. the team who wins each round keeps the card, and the first team to earn four cards wins the game. Futhermore, since the questions and answe …",
    "owners": [
     {
      "id": 2,
@@ -1039,6 +1184,9 @@
    "category": "Movies / TV / Radio theme",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/k_jhYbjZRWl4EtBMPx_kXQ__medium/img/HBWlg5giqt0Mfck7M8Mb4B0dZCA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6003645.png",
+   "bggId": 332015,
+   "websiteUrl": "https://funkogames.com/games/fast-and-furious-highway-heist/",
+   "description": "Get ready for an exciting new mission based on the blockbuster movie series, playing as Dom, Brian, Letty, Roman, and the rest of Team Toretto on a harrowing high-speed heist! Go up against heavily-armed enemies with your hot cars, daring driving, and jaw-dropping vehicle-to-vehicle leaps of faith. Whether you are taking down a swerving semi filled with valuable cargo, stopping a rampaging tank in its tracks, or brin …",
    "owners": [
     {
      "id": 1,
@@ -1057,6 +1205,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/BBefMnVYBDS3EbJ9fPaC8A__medium/img/d_inAllNsaR_UqK7U1RVkvXhsX0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8634453.jpg",
+   "bggId": 436126,
+   "websiteUrl": "https://stonemaiergames.com/games/finspan/",
+   "description": "You are a marine researcher seeking to find and observe an array of aquatic life in the colorful Sunlight Zone, ghostly Twilight Zone, and pitch-black Midnight Zone of the world's seas and oceans. In Finspan, the fish you discover over four weeks will generate a series of benefits as you dive deeper into the ocean.\nEach dive site specializes in a key aspect of expanding your research:\nGrow your collection of fish.\nDi …",
    "owners": [
     {
      "id": 6,
@@ -1075,6 +1226,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 126,
    "imageUrl": "https://cf.geekdo-images.com/jSSg2htYT2qywQH2GZJwHQ__medium/img/x6fnMfdWLhPacNy5TTYle6-ghHs=/fit-in/500x500/filters:no_upscale():strip_icc()/pic9531435.jpg",
+   "bggId": 468426,
+   "websiteUrl": "https://stonemaiergames.com/games/finspan/sharks-reefs-expansion/",
+   "description": "Finspan: Sharks & Reefs adds to the variety of the core game with a focus on sharks and fish that live among coral reefs. This expansion introduces new coral reef habitats to your ocean mat and more incredible sharks—with fearsome new abilities!\nPlayers can now nurture colorful coral reefs in each of their ocean's three dive sites. Healthy reefs enable you to play powerful reef fish, unlock fish abilities, and score …",
    "owners": [
     {
      "id": 6,
@@ -1093,6 +1247,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/CF0n_oG94gYJMQxMoE0mEQ__medium/img/_pUEvapv7XKtyhj8INdSKfi8cGA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic9241229.png",
+   "bggId": 420370,
+   "websiteUrl": null,
+   "description": "In this fun collaborative game, players try to get into each others' heads by guessing how fellow players rank a variety of topics in priority order of 1 through 5. Match more right than wrong and victory is yours!\n—description from the publisher",
    "owners": [
     {
      "id": 2,
@@ -1116,6 +1273,9 @@
    "category": "Fantasy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/EvGtnsBDcfnKiqSiXHothQ__medium/img/J6mbhK6FEip_W_om-klH3EjJfiQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6605448.jpg",
+   "bggId": 336986,
+   "websiteUrl": "https://cardboardalchemy.com/flamecraft/",
+   "description": "Artisan dragons, the smaller and magically talented versions of their larger (and destructive) cousins, are sought by shopkeepers so that they may delight customers with their flamecraft. You are a Flamekeeper, skilled in the art of conversing with dragons, placing them in their ideal home and using enchantments to entice them to produce wondrous things. Your reputation will grow as you aid the dragons and shopkeeper …",
    "owners": [
     {
      "id": 2,
@@ -1139,6 +1299,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/V-OcmY-s5dS-Ya4x17BPSw__medium/img/epT1LeS5_ohgyFmldt5bd3QvoU8=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7982361.jpg",
+   "bggId": 408724,
+   "websiteUrl": null,
+   "description": "Fractal: Beyond the Void is redefining the 4X genre with an expansive and dynamic strategy game in an ever-changing, story-driven legacy setting. Millenia after the collapse of the Federation, the greatest empire to ever rule the galaxy, a few species are taking up to the stars again to escape their dying worlds. They all have the same goal: to rebuild their civilizations and reclaim their former glory. But there can …",
    "owners": [
     {
      "id": 1,
@@ -1157,6 +1320,9 @@
    "category": "Word Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/K9ahLIoxHImU7__gyKE8rA__medium/img/AzkzPPNI6I1sTil2ub11qUVWfe0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1836808.jpg",
+   "bggId": 62709,
+   "websiteUrl": null,
+   "description": "There’s no time to lose… so grab some clues! Can you get the other players to guess the word KANGAROO? You can’t talk or act— but you can find, grab and play just the right clues from 120 descriptive tiles as everyone shouts out their guesses. You play living, wild, and tall. Is it a Redwood? A giraffe? A basketball player? Nope. Keep playing tiles like furry, brown and bouncy. Once another player yells out KANGAROO, …",
    "owners": [
     {
      "id": 4,
@@ -1180,6 +1346,9 @@
    "category": "Novel-based",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/ugYBvYxyWyx8_BqaFKZlGw__medium/img/k5TjMCpwnYtZ_ZcX5czN-vZhdYE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3518231.jpg",
+   "bggId": 199042,
+   "websiteUrl": "https://theop.games/products/game/harry-potter-hogwarts-battle-a-cooperative-deck-building-game/",
+   "description": "The forces of evil are threatening to overrun Hogwarts castle in Harry Potter: Hogwarts Battle, a cooperative deck-building game, and it's up to four students to ensure the safety of the school by defeating villains and consolidating their defenses. In the game, players take on the role of a Hogwarts student: Harry, Ron, Hermione or Neville, each with their own personal deck of cards that's used to acquire resources. …",
    "owners": [
     {
      "id": 4,
@@ -1208,6 +1377,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 38,
    "imageUrl": "https://cf.geekdo-images.com/fNO5scPDSFI_shEQlr-PZQ__medium/img/ccXCzMwiE3JzaWL_Tg2xRFjQK-g=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3626222.jpg",
+   "bggId": 223494,
+   "websiteUrl": "https://theop.games/products/game/harry-potter-hogwarts-battle-the-monster-box-of-monsters-expansion/",
+   "description": "Description from the publisher:\nVenture into the Forbidden Forest with The Monster Box of Monsters, the highly anticipated expansion to Harry Potter: Hogwarts Battle Play as Harry, Hermione, Ron, Neville or Luna Lovegood as you face frightening creatures and challenging encounters. Beware of any wrongdoing that might earn you detention! Only working together to defeat the evil forces and protecting iconic locations w …",
    "owners": [
     {
      "id": 2,
@@ -1226,6 +1398,9 @@
    "category": "Racing",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/-vOrd4bOspibyohYExLqWg__medium/img/xaRWr6PjwXHG1CGsIVTkW7YY9CI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6940449.png",
+   "bggId": 366013,
+   "websiteUrl": "https://www.daysofwonder.com/heat/",
+   "description": "Based on simple and intuitive hand management, Heat: Pedal to the Metal puts players in the driver's seat of intense car races, jockeying for position to cross the finish line first, while managing their car's speed if they don't want to overheat. Selecting the right upgrades for their car will help them hug the curves and keep their engine cool enough to maintain top speeds. Ultimately, their driving skills will be …",
    "owners": [
     {
      "id": 4,
@@ -1244,6 +1419,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/v695lqCTLA_PU6fBHmfXCA__medium/img/vKQptdOXxg4qNitDtxcO8kCBQXc=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5676212.jpg",
+   "bggId": 699,
+   "websiteUrl": "https://hasbropulse.com/pages/avalon-hill-heroquest",
+   "description": "HeroQuest is a Dungeons & Dragons-style adventure game. One player acts as game master, revealing the maze-like dungeon piecemeal as the players wander. Other players take on a character (wizard, elf, dwarf, or barbarian) and venture forth into dungeons on fantasy quests. The HeroQuest series consists of the main game and a number of expansions.\nThe game is played on a grid representing the interior of a dungeon or c …",
    "owners": [
     {
      "id": 2,
@@ -1262,6 +1440,9 @@
    "category": "Card Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/_LTujSe_o16nvjDC-J0seA__medium/img/-ghibMTn6EjeuaN1edmVlA3eJpE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5100947.jpg",
+   "bggId": 54043,
+   "websiteUrl": "https://www.spacecowboys.fr/jaipur-english",
+   "description": "You are one of the two most powerful traders in the city of Jaipur, the capital of Rajasthan, but that's not enough for you because only the merchant with two \"seals of excellence\" will have the privilege of being invited to the Maharaja's court. You are therefore going to have to do better than your direct competitor by buying, exchanging, and selling at better prices, all while keeping an eye on both your camel her …",
    "owners": [
     {
      "id": 1,
@@ -1280,6 +1461,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/74haNunMBn85beBi-yIKwA__medium/img/re05AXPJQp3Db4pih7iR4Ca9Eig=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8669313.png",
+   "bggId": 254640,
+   "websiteUrl": "https://www.rprod.com/en/games/just-one",
+   "description": "Just One is a co-operative party game in which you all play together to get the best score! Your goal each round is to get one player — the active player — to guess a mystery word based on the clues given by teammates. Can you achieve a perfect score by guessing all the mystery words?\nIn more detail, everyone who is not the active player sees the mystery word, then each player independently writes a clue on their per …",
    "owners": [
     {
      "id": 4,
@@ -1303,6 +1487,9 @@
    "category": "Maze",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/qpL225YNN5iKRPotB7Q7MA__medium/img/AjjNQW04U7bMgJaMCzbKRl937x0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6173371.jpg",
+   "bggId": 6546,
+   "websiteUrl": null,
+   "description": "Maneuver the steel ball through the wooden maze without falling into any of the holes. The surface may have numerous tiny pits and bumps, making the behavior of the ball all the more erratic, but that arguably adds to the challenge. An unplugged precursor to video games.\nThe game was invented in the early 1940s by Sven Bergling in Tran s, Sweden. It was lent to Tage Friberg to pass time while he was sick. Tage later …",
    "owners": [
     {
      "id": 1,
@@ -1321,6 +1508,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/TqHWmvkKSjZiB8-HArswAg__medium/img/hXNUj4xXVC2rXcaLS6F3Z3Ms6vc=/fit-in/500x500/filters:no_upscale():strip_icc()/pic391692.jpg",
+   "bggId": 35207,
+   "websiteUrl": null,
+   "description": "Likewise! the laughable, lively, like minded party game - a thought-provoking game where it pays to think alike.\nIn this game, individuals are presented with a random pairing of a Description (adjective) and Subject(noun) Cards. With 71 cards of each, there are over 5,000 possible combinations. The pairing might be \"Exotic - Car,\" \"Massive - Breakfast Food, \" \"Pathetic - Celebrity,\" \"Mysterious - Politician,\" or some …",
    "owners": [
     {
      "id": 3,
@@ -1339,6 +1529,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/4ij-MAlvhZzV4JQ0TH5Mow__medium/img/a_AZYWl9MbPwChK7gvNBa9QSq8s=/fit-in/500x500/filters:no_upscale():strip_icc()/pic622237.jpg",
+   "bggId": 2838,
+   "websiteUrl": null,
+   "description": "\"If you were invisible, where would you go?\" \"If you could be a member of any TV-sitcom family, what would you choose?\" Rated one of the hottest new board games by USA Today, The Chicago Tribune, The San Francisco Chronicle and Games Magazine, Loaded Questions is the hilarious new board game that tests players on how well they know each other with over 500 fun personality-filled questions.",
    "owners": [
     {
      "id": 2,
@@ -1362,6 +1555,9 @@
    "category": "City Building",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/vSEq1nDAoFPjfcCdnvkN4w__medium/img/JeOiU91hKUBIiwKxWb15iys8lxE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic565140.jpg",
+   "bggId": 57239,
+   "websiteUrl": null,
+   "description": "A game of world geography and cunning deception. In Locale, the object of the game is to make up a story by explaining as much as you can about a given location. (Do you know where Bird-in-Hand is? How about Timbuktu?) Players vote on whose story is the most believable. Players score points by writing a story that's good enough to fool others or correctly guessing the true locale. Bluff your way around the globe! (fr …",
    "owners": [
     {
      "id": 1,
@@ -1380,6 +1576,9 @@
    "category": "Sports",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/xNQIfDmFKjy6QVuYo7xDwA__medium/img/_GIl--01avdQwwPlFVZpuflFfno=/fit-in/500x500/filters:no_upscale():strip_icc()/pic420679.jpg",
+   "bggId": 40237,
+   "websiteUrl": null,
+   "description": "Long Shot is YOUR ticket to the track. In this exciting family-friendly horse racing board game, up to 8 players bet, buy horses, and strategize as the race unfolds.\nLong Shot includes over 100 unique cards allowing players to combine strategies and resources for maximum control of the race. Will you buy a horse or two in the hopes of winning some of the purse, or will you bet it all on the long shot?\nWhether a novic …",
    "owners": [
     {
      "id": 3,
@@ -1398,6 +1597,9 @@
    "category": "Fantasy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/EybxJlUc9rz7F7HVFLqsdw__medium/img/1K84x5dSQUemW7ThQyQtwteuwq4=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8378939.jpg",
+   "bggId": 421006,
+   "websiteUrl": "https://www.rprod.com/en/games/duel-for-middle-earth",
+   "description": "A dark rumour rises from Mordor. The Eye turns to Middle-earth. The hour has come. The Fellowship is reunited. The Heroes prepare for battle. Will you play as the Fellowship of the Ring to defend the free races and destroy the One Ring? Or will you play as Sauron and pursue Frodo and Sam while deploying your hordes to the gates of the enemy cities? The destiny of Middle-earth is in your hands!\nA game plays over 3 suc …",
    "owners": [
     {
      "id": 4,
@@ -1416,6 +1618,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/DFZlakC9Lv8cB5Co5z3meA__medium/img/Z_YeNb9uLh-bfcF7t8WCU24epTQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic9230112.jpg",
+   "bggId": 110327,
+   "websiteUrl": "http://dnd.wizards.com/products/tabletop-games/board-games/lords-waterdeep",
+   "description": "Waterdeep, the City of Splendors – the most resplendent jewel in the Forgotten Realms, and a den of political intrigue and shady back-alley dealings.\nIn Lords of Waterdeep, a strategy board game for 2-5 players, you take on the role of one of the masked Lords of Waterdeep, secret rulers of the city. Through your agents, you recruit adventurers to go on quests on your behalf, earning rewards and increasing your influe …",
    "owners": [
     {
      "id": 2,
@@ -1434,6 +1639,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/6GqH14TJJhza86BX5HCLEQ__medium/img/mYYU_PaiV3SrLFfevRNLRQQKZBo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5674958.jpg",
+   "bggId": 312484,
+   "websiteUrl": "https://czechgames.com/en/lost-ruins-of-arnak/",
+   "description": "On an uninhabited island in uncharted seas, explorers have found traces of a great civilization. Now you will lead an expedition to explore the island, find lost artifacts, and face fearsome guardians, all in a quest to learn the island's secrets.\nLost Ruins of Arnak combines deck-building and worker placement in a game of exploration, resource management, and discovery. In addition to traditional deck-builder effect …",
    "owners": [
     {
      "id": 2,
@@ -1452,6 +1660,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/T1ltXwapFUtghS9A7_tf4g__medium/img/CkNSIz4NeX31r0YWfOX6aZ9FWl8=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1401448.jpg",
+   "bggId": 129622,
+   "websiteUrl": "https://www.zmangames.com/en/games/love-letter/",
+   "description": "All of the eligible young men (and many of the not-so-young) seek to woo the princess of Tempest. Unfortunately, she has locked herself in the palace, and you must rely on others to take your romantic letters to her. Will yours reach her first?\nLove Letter is a game of risk, deduction, and luck for 2–4 players. Your goal is to get your love letter into Princess Annette's hands while deflecting the letters from compet …",
    "owners": [
     {
      "id": 2,
@@ -1470,6 +1681,9 @@
    "category": "Video Game Theme",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/lAvfCCEBDeyoa1CpdgOFCg__medium/img/z_M89upglkqhvubYRCuYsBrcMoE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4975740.jpg",
+   "bggId": 269603,
+   "websiteUrl": "https://www.ravensburger.us/discover/minecraft/index.html",
+   "description": "As in the original Minecraft digital game, in Minecraft: Builders & Biomes players explore the Overworld, build structures, and mine resources, earning points for structures and the largest connected biomes of forest, desert, mountain, or snowy tundra spaces on their player boards.\nFamiliar foes like Endermen, Creepers, and other mobs also appear throughout the game, and they need to be defeated using weapons collect …",
    "owners": [
     {
      "id": 4,
@@ -1488,6 +1702,9 @@
    "category": "City Building",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/fz4aYmycg9baQlm_DzwyKA__medium/img/wnTKn59EBj_P-kqJi-SCA_qwyHE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7443423.jpg",
+   "bggId": 295486,
+   "websiteUrl": "https://www.kosmos.de/spielware/spiele/familienspiele/10984/my-city",
+   "description": "My City is a competitive legacy game in which you develop a city on your own playing board through the ages.\nThe game consists of 24 episodes, beginning with the development of a city in its early preindustrial stages and progressing through industrialization. During each game, players customize their experience by adding elements to their personal boards and adding cards to the game. Players' choices and action made …",
    "owners": [
     {
      "id": 1,
@@ -1506,6 +1723,9 @@
    "category": "Murder / Mystery",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/1nQ3ZKudtDeAP7IiKE-kNg__medium/img/WB69_M4ljbqWcwTSHup85b4Wzbo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8625343.jpg",
+   "bggId": 181304,
+   "websiteUrl": "https://www.libellud.com/en/our-games/mysterium/",
+   "description": "In the 1920s, Mr. MacDowell, a gifted astrologer, immediately detected a supernatural being upon entering his new house in Scotland. He gathered eminent mediums of his time for an extraordinary s ance, and they have seven hours to make contact with the ghost and investigate any clues that it can provide to unlock an old mystery.\nUnable to talk, the amnesiac ghost communicates with the mediums through visions, which a …",
    "owners": [
     {
      "id": 1,
@@ -1524,6 +1744,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/2cf8lebaIrJ8Z62HGEs2wQ__medium/img/SSKF3RXAv8otMXNh-3_ijT2bEAI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3287905.png",
+   "bggId": 194607,
+   "websiteUrl": "https://www.alderac.com/mystic-vale/",
+   "description": "A curse has been placed on the Valley of Life. Hearing the spirits of nature cry out for aid, clans of druids have arrived, determined to use their blessings to heal the land and rescue the spirits. It will require courage and also caution, as the curse can overwhelm the careless who wield too much power.\nIn Mystic Vale, 2 to 4 players take on the role of druidic clans trying to cleanse the curse upon the land. Each …",
    "owners": [
     {
      "id": 2,
@@ -1542,6 +1765,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/pqu26JNQZB0jCcVDC18PKQ__medium/img/Co003D5CalFPmGWAw-6QpkaWgNA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6422235.png",
+   "bggId": 317582,
+   "websiteUrl": "https://openowlstudios.com/pages/mythwind",
+   "description": "Mythwind is a cooperative & solo \"cozy\" board game with unique characters, magical sprites, engaging story and an unending adventure.\nDuring the game, the characters are working together to establish and build a new town in the magical Mythwind Valley. They work to achieve various goals by constructing buildings within the town, adventuring throughout the region, navigating relationships with the mysterious sprites w …",
    "owners": [
     {
      "id": 6,
@@ -1560,6 +1786,9 @@
    "category": "City Building",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/HTdnmBGtjaS2hgn9IEta9g__medium/img/cDPR727kky8ssXf7H5t9AKab-hQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2515532.jpg",
+   "bggId": 174660,
+   "websiteUrl": "https://blueorangegames.com/games/newyork-1901",
+   "description": "Relive the dawn of modern New York City, the historic years that made it what it is today. Build bigger and higher skyscrapers on some of Lower Manhattan's most iconic streets. Raise one of four legendary skyscrapers — the Park Row, the Singer, the Metropolitan Life, or the majestic Woolworth — and make one of them the crown jewel of your real estate empire!\nIn New York 1901, the players are building skyscrapers on a …",
    "owners": [
     {
      "id": 1,
@@ -1578,6 +1807,9 @@
    "category": "Post-Napoleonic",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/sy89BiuZXfbSnG7Cag9tBQ__medium/img/BS08XvF3c7g-Sk7bM_RNSH-qTSk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5902073.png",
+   "bggId": 12568,
+   "websiteUrl": null,
+   "description": "\"The Game You Can't Get Enough Of!\" Obsession by Mego Toys is about rolling 2 dice, and moving your rings forward, or your opponent's rings backward, depending on the numbers that are rolled, and the numbers for the rings that are in play. Rings that are in your Safety Zone can't be moved by your opponent. Game ends when one player has 10 rings in the Safety Zone or at the top of his area.",
    "owners": [
     {
      "id": 1,
@@ -1596,6 +1828,9 @@
    "category": "Aviation / Flight",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/Dkd1DKelqroYz21llrqJ_A__medium/img/Ik9iue8FzjNPipir7DyvEnFlc_c=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5252922.jpg",
+   "bggId": 303057,
+   "websiteUrl": "https://www.prosperohall.com/games/panam/",
+   "description": "In Pan Am, players compete with Pan American Airways and others to build an air-travel empire. Outbid rivals for lucrative landing rights, buy planes with longer range to reach the far corners of the world, and use insider connections to advance your interests. As you bump up against the ever-growing Pan Am, you can sell your routes to the company to earn a tidy profit, with you then using that money to invest in oth …",
    "owners": [
     {
      "id": 1,
@@ -1614,6 +1849,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/S3ybV1LAp-8SnHIXLLjVqA__medium/img/cJHPo5TS1qrtu24FTU5RfbyT7yk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1534148.jpg",
+   "bggId": 30549,
+   "websiteUrl": "https://www.zmangames.com/en/products/pandemic/",
+   "description": "In Pandemic, several virulent diseases have broken out simultaneously all over the world! The players are disease-fighting specialists whose mission is to treat disease hotspots while researching cures for each of four plagues before they get out of hand.\nThe game board depicts several major population centers on Earth. On each turn, a player can use up to four actions to travel between cities, treat infected populac …",
    "owners": [
     {
      "id": 2,
@@ -1632,6 +1870,9 @@
    "category": "Travel",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/mF2cSNRk2O6HtE45Sl9TcA__medium/img/kDy-WWBu-BX-B1JkkWA6CCHFkOY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4852372.jpg",
+   "bggId": 266524,
+   "websiteUrl": "http://keymastergames.com/parks",
+   "description": "PARKS is a celebration of the US National Parks featuring illustrious art from Fifty-Nine Parks.\nIn PARKS, players will take on the role of two hikers as they trek through different trails across four seasons of the year. While on the trail, these hikers will take actions and collect memories of the places your hikers visit. These memories are represented by various resource tokens like mountains and forests. Collect …",
    "owners": [
     {
      "id": 2,
@@ -1655,6 +1896,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 56,
    "imageUrl": "https://cf.geekdo-images.com/ucDMn6DilNfP6MgrgVJ8ng__medium/img/evSbc3URDwyKixa9dwbbuoNvhgY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5673231.jpg",
+   "bggId": 298729,
+   "websiteUrl": "https://keymastergames.com/products/parks-nightfall",
+   "description": "Welcome to PARKS Expansion: Nightfall. In Nightfall, you'll find new Park Cards featuring new rewards and all new artwork from the Fifty-Nine Parks Print Series, including the 17 parks not represented in the base game. This expansion also includes new Year Cards and Bonus Scoring opportunities, and you'll get to experience the trail in a brand new way with the new Camping mechanic.",
    "owners": [
     {
      "id": 2,
@@ -1678,6 +1922,9 @@
    "category": "Card Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/LkEPNu7bPTS1rVRU_Ba-Dg__medium/img/LP5MFfQ6snHsDKB2ekc_QMTQBOY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic423644.jpg",
+   "bggId": 140,
+   "websiteUrl": "http://www.winning-moves.com/images/Deluxe_Pit_Rules.pdf",
+   "description": "Pit is an open-outcry commodity trading game. The first edition in 1903 had a deck of 63 cards, 9 each of 7 commodities, each with a value (ranging from 40 for Flax to 100 for Wheat). Players offer trades by crying out the number of cards they want to swap (“One! One! One!”, or “Three! Three! Three!”) but not their identity. The winner of the hand is the first to collect all of one commodity, declaring “Corner on Whe …",
    "owners": [
     {
      "id": 4,
@@ -1696,6 +1943,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/w05q02PbXAw64GKtd4H4qg__medium/img/uowub9rwArM_rIqdu1hcOF-DxdQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6978684.jpg",
+   "bggId": 365104,
+   "websiteUrl": "https://buffalogames.com/planted-board-game/",
+   "description": "In this game of nature & nurture, make your house beautiful by caring for your very own collection of houseplants! In this easy-to-learn board game, collect your favorite plants and then try to feed them every round with the right combination of light, water, and plant food.\nPlanted features 42 varieties of popular and exotic houseplants, each with their own requirements to grow. Discover various planting tools and d …",
    "owners": [
     {
      "id": 2,
@@ -1714,6 +1964,9 @@
    "category": "Economic",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/QFiIRd2kimaMqTyWsX0aUg__medium/img/Cvy4ZJK2sUOiIRj7Q27aq7fctTg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic158548.jpg",
+   "bggId": 3076,
+   "websiteUrl": "https://www.riograndegames.com/games/puerto-rico-deluxe-edition/",
+   "description": "In Puerto Rico, players assume the roles of colonial governors on the island of Puerto Rico. The aim of the game is to amass victory points by shipping goods to Europe or by constructing buildings.\nEach player uses a separate small board with spaces for city buildings, plantations, and resources. Shared between the players are three ships, a trading house, and a supply of resources and doubloons.\nThe resource cycle o …",
    "owners": [
     {
      "id": 2,
@@ -1737,6 +1990,9 @@
    "category": "Medical",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/B1bLRWzTASZ-xx9NoAE79A__medium/img/QrQ-TdvFz2pf3uR9fANmLPUdiIs=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8780293.png",
+   "bggId": 244521,
+   "websiteUrl": "https://www.schmidtspiele.de/detail/product/the-quacks-of-quedlinburg.html",
+   "description": "In Quacks, which was first released as The Quacks of Quedlinburg, players are charlatans — or quack doctors — each making their own secret brew by adding ingredients one at a time. Take care with what you add, though, for a pinch too much of this or that will spoil the whole mixture!\nEach player has their own bag of ingredient chips. During each round, they simultaneously draw chips from their bags and add them to th …",
    "owners": [
     {
      "id": 4,
@@ -1765,6 +2021,9 @@
    "category": "Dice",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/aOt-bT9nDzZdWl0dUqLy4w__medium/img/l0MeHmp-WKmZtkzL5ORILoluD4k=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1950487.jpg",
+   "bggId": 131260,
+   "websiteUrl": "http://www.gamewright.com/gamewright/index.php?section=games&page=game&show=287",
+   "description": "Qwixx is a quick-playing dice game in which everyone participates, no matter whose turn it is. Each player has a scoresheet with the numbers 2-12 in rows of red and yellow and the numbers 12-2 in rows of green and blue. To score points you want to mark off as many numbers as possible, but you can mark off a number only if it's to the right of all marked-off numbers in the same row.\nOn a turn, the active player rolls …",
    "owners": [
     {
      "id": 6,
@@ -1788,6 +2047,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/-DOqixs8uwKUvvWPKI4f9w__medium/img/L-Bc9iOTfUx-qymfH-VVY57DClw=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5261714.jpg",
+   "bggId": 28143,
+   "websiteUrl": "https://www.riograndegames.com/games/race-for-the-galaxy/",
+   "description": "In Race for the Galaxy, players build galactic civilizations by playing cards representing worlds or technical and social developments.\nEach round, players secretly and simultaneously select an action card corresponding to one phase of a round. These phases let players draw cards, play cards, add goods to worlds, or consume goods for VP chips. Only the phases chosen will occur that round. Every player may act in a ph …",
    "owners": [
     {
      "id": 2,
@@ -1806,6 +2068,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/V6QEXXgRgz3urOrRVZ_1zA__medium/img/hEXHPlyeKGFKp2Y0LCSqAB-E0iU=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5960554.jpg",
+   "bggId": 329465,
+   "websiteUrl": "https://stonemaiergames.com/games/red-rising/",
+   "description": "Enter the futuristic universe of Red Rising, based on the book series by Pierce Brown featuring a dystopian society divided into fourteen castes. You represent a house attempting to rise to power as you piece together an assortment of followers (represented by your hand of cards). Will you break the chains of the Society or embrace the dominance of the Golds?\nRed Rising is a hand-management, combo-building game for 1 …",
    "owners": [
     {
      "id": 1,
@@ -1824,6 +2089,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/QNfiVUjQUb3WizjliCu1NQ__medium/img/98A1KYfPxEEnnxSnAwYXEB7swPQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic470283.jpg",
+   "bggId": 34887,
+   "websiteUrl": "http://www.sjgames.com/revolution/",
+   "description": "Blackmail the printer. Threaten the innkeeper. Bribe the priest. Welcome to Revolution!\nSecretly bid against your opponents to gain victory points, control territories (worth victory points at the end of the game) and collect more Gold, Blackmail, and Force tokens for the next round of bidding! Will you try to control the tavern or the fortress? The harbor or the plantation? Knowing where to push for points – and whe …",
    "owners": [
     {
      "id": 4,
@@ -1847,6 +2115,9 @@
    "category": "Wargame",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/JUAUWaVUzeBgzirhZNmHHw__medium/img/A3ftHL94MHJxhG0DPHXHWo6gkKM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4254509.jpg",
+   "bggId": 237182,
+   "websiteUrl": "http://ledergames.com/root/",
+   "description": "Root is a game of adventure and war in which 2 to 4 (1 to 6 with the 'Riverfolk' expansion, 2-6 with the 'Underworld', or 'Marauder' expansions) players battle for control of a vast wilderness. Like Vast: The Crystal Caverns, each player in Root has unique capabilities and a different victory condition. Now, with the aid of gorgeous, multi-use cards, a truly asymmetric design has never been more accessible.\nThe nefar …",
    "owners": [
     {
      "id": 3,
@@ -1865,6 +2136,9 @@
    "category": "Fighting",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/LoiCqvj7Zu7hsDPuyRDThA__medium/img/6lps_E-eGTBtsorLnuIBfeO0k_I=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1531841.jpg",
+   "bggId": 128667,
+   "websiteUrl": "https://www.dvgiochi.com/catalogo/samurai-sword/",
+   "description": "Game description from the publisher:\nSamurai Sword is a game based on the proven Bang! mechanisms and set in feudal Japan. In this game, the familiar features of Bang! are enhanced by more dynamic and fast-paced game play, and thanks to a new scoring system – based on honor points and resilience points – there is no player elimination. Everybody gets to fight to the very end! Also, weapons and attacks are fused into …",
    "owners": [
     {
      "id": 1,
@@ -1883,6 +2157,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/6yVHs8Xa9H3-10ls3H8Ojw__medium/img/_hs8pOesEpS6M4ix-BQG60KhRcI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4222162.jpg",
+   "bggId": 33604,
+   "websiteUrl": null,
+   "description": "Say Anything is a light-hearted game about what you and your friends think. It gives you the chance to settle questions that have been hotly debated for centuries. For instance, \"What is the most overrated band of all time?\" or \"Which celebrity would be the most fun to hang out with for a day?\" So dig deep into your heart or just come up with something witty - this is your chance to Say Anything!\nHow to Play\n1) Ask a …",
    "owners": [
     {
      "id": 1,
@@ -1901,6 +2178,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/7k_nOxpO9OGIjhLq2BUZdA__medium/img/v0YIKbI9XrerQQaIjsGUtyWKY5k=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3163924.jpg",
+   "bggId": 169786,
+   "websiteUrl": "https://stonemaiergames.com/games/scythe/",
+   "description": "It is a time of unrest in 1920s Europa. The ashes from the first great war still darken the snow. The capitalistic city-state known simply as “The Factory”, which fueled the war with heavily armored mechs, has closed its doors, drawing the attention of several nearby countries.\nScythe is an engine-building game set in a 1920s era, alternate-history. It is a time of farming and war, broken hearts and rusted gears, inn …",
    "owners": [
     {
      "id": 6,
@@ -1924,6 +2204,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 67,
    "imageUrl": "https://cf.geekdo-images.com/gfT_6H4P9wdNQQ2KMU9rHg__medium/img/H7adEZHgRHoMGbPlUHnSqw917VE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3037396.jpg",
+   "bggId": 199727,
+   "websiteUrl": "http://stonemaiergames.com/games/scythe/scythe-invaders-from-afar/",
+   "description": "While empires rise and fall in Eastern Europa, the rest of the world takes notice. Two distant factions, Albion and Togawa, send emissaries to scout the land and employ their own distinct styles of conquering. Scythe: Invaders from Afar, an expansion for Scythe, adds two new factions: 10 miniatures, 62 custom wooden tokens, and 2 faction mats. It also includes some new cardboard tokens, two new player mats, six Autom …",
    "owners": [
     {
      "id": 6,
@@ -1947,6 +2230,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 67,
    "imageUrl": "https://cf.geekdo-images.com/GRp__UYY-wM-i2fg4Qzefw__medium/img/hZerprtAQX0IKNWrPQ-udpOYiDs=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3911078.jpg",
+   "bggId": 242277,
+   "websiteUrl": "https://stonemaiergames.com/games/scythe/scythe-the-rise-of-fenris/",
+   "description": "Empires have risen and fallen in the aftermath of the Great War, and Europa stands on the precipice of a new era. The economy is robust, morale is high, and defenses are strong. There are reports from the countryside of strange soldiers with glowing eyes, but they seem distant and harmless.\nScythe: The Rise of Fenris, the conclusion to the Scythe expansion trilogy, enables two different options for any player count ( …",
    "owners": [
     {
      "id": 6,
@@ -1970,6 +2256,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 67,
    "imageUrl": "https://cf.geekdo-images.com/kcp2L5EPPr-okBb1jCtxpA__medium/img/odsVmhgp6HPz3zQ1ZgNmVTj5Pxg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3487272.jpg",
+   "bggId": 223555,
+   "websiteUrl": "https://stonemaiergames.com/games/scythe/scythe-the-wind-gambit/",
+   "description": "Mankind has long been confined to travel by land and sea, but a new technology has emerged from the greatest minds in Eastern Europa: airships. These steam-driven behemoths sail freely across the sky, aiding their empire's expansion through innovation and confrontation. As the years pass, the world has come to understand that no single faction will rise above the rest for any span of time. In the hope of decreasing t …",
    "owners": [
     {
      "id": 6,
@@ -1993,6 +2282,9 @@
    "category": "Bluffing",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/rAQ3hIXoH6xDcj41v9iqCg__medium/img/qJ6NUCGjW1bW-h3my5SPdefopuE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5164305.jpg",
+   "bggId": 188834,
+   "websiteUrl": "http://www.secrethitler.com/",
+   "description": "Secret Hitler is a dramatic game of political intrigue and betrayal set in 1930s Germany. Each player is randomly and secretly assigned to be a liberal or a fascist, and one player is Secret Hitler. The fascists coordinate to sow distrust and install their cold-blooded leader; the liberals must find and stop the Secret Hitler before it's too late. The liberal team always has a majority.\nAt the beginning of the game, …",
    "owners": [
     {
      "id": 4,
@@ -2011,6 +2303,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/_BUXOVRDU9g_eRwgpR5ZZw__medium/img/EzzzbqaDF5nOlF94FGdbo9s97Po=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8160466.jpg",
+   "bggId": 418059,
+   "websiteUrl": "https://czechgames.com/en/seti/",
+   "description": "In SETI: Search for Extraterrestrial Intelligence, you lead a scientific institution tasked with searching for traces of life beyond planet Earth. The game draws inspiration from current or emerging technologies and efforts in space exploration. Players will explore nearby planets and their moons by launching probes from Earth while taking advantage of ever-shifting planetary positions. Decide whether to land on thei …",
    "owners": [
     {
      "id": 6,
@@ -2029,6 +2324,9 @@
    "category": "Negotiation",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/0XODRpReiZBFUffEcqT5-Q__medium/img/_YWZOkLZn2-3m6PVYjyXP3wtFVw=/fit-in/500x500/filters:no_upscale():strip_icc()/pic9156909.png",
+   "bggId": 13,
+   "websiteUrl": "http://www.catan.com/",
+   "description": "In CATAN (formerly The Settlers of Catan), players try to be the dominant force on the island of Catan by building settlements, cities and roads. On each turn dice are rolled to determine which resources the island produces. Players build structures by 'spending' resources (sheep, wheat, wood, brick and ore) which are represented by the relevant resource cards; each land type, with the exception of the unproductive d …",
    "owners": [
     {
      "id": 4,
@@ -2067,6 +2365,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/BBgLFKUzr6tcKtlIM2JSFw__medium/img/IshhLsNKyZAQFKtGMAupbmKfsJA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2075830.jpg",
+   "bggId": 157969,
+   "websiteUrl": "http://www.arcanewonders.com/sheriff-of-nottingham",
+   "description": "Prince John is coming to Nottingham! Players, in the role of merchants, see this as an opportunity to make quick profits by selling goods in the bustling city during the Prince's visit. However, players must first get their goods through the city gate, which is under the watch of the Sheriff of Nottingham. Should you play it safe with legal goods and make a profit, or risk it all by sneaking in illicit goods? Be mind …",
    "owners": [
     {
      "id": 2,
@@ -2085,6 +2386,9 @@
    "category": "Aviation / Flight",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/uXMeQzNenHb3zK7Hoa6b2w__medium/img/QzlLa6xEbGUfCmRy4l34oSRIDxs=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7398904.jpg",
+   "bggId": 373106,
+   "websiteUrl": "https://www.scorpionmasque.com/en/sky-team",
+   "description": "Sky Team is a co-operative game, exclusively for two players, in which you play a pilot and co-pilot at the controls of an airliner. Your goal is to work together as a team to land your airplane in different airports around the world.\nTo land your plane, you need to silently assign your dice to the correct spaces in your cockpit to balance the axis of your plane, control its speed, deploy the flaps, extend the landin …",
    "owners": [
     {
      "id": 2,
@@ -2108,6 +2412,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/r72BZoC3whophBzKi45Rgg__medium/img/D7zFyxlwMXnymDCIDHunSCMrcdM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6737677.jpg",
+   "bggId": 358320,
+   "websiteUrl": "https://www.redravengames.com/sleeping-gods-distant-skies/",
+   "description": "San Francisco, 1937: Your cargo plane flies through a portal in the sky, transporting you to a rugged landscape filled with bizarre creatures, scheming gods, and untold dangers. But can you find your way back before the portal closes?\nSleeping Gods: Distant Skies is a standalone sequel set in the world of Sleeping Gods. As in the original game, you and your friends trek through a vast landscape as you read branching …",
    "owners": [
     {
      "id": 6,
@@ -2126,6 +2433,9 @@
    "category": "Fantasy",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/aoPM07XzoceB-RydLh08zA__medium/img/_spsbTmBorKNjHmR-9PdqGM3CWc=/fit-in/500x500/filters:no_upscale():strip_icc()/pic428828.jpg",
+   "bggId": 40692,
+   "websiteUrl": "https://www.daysofwonder.com/small-world-universe/small-world/",
+   "description": "In Small World, players vie for conquest and control of a world that is simply too small to accommodate them all.\nDesigned by Philippe Keyaerts as a fantasy follow-up to his award-winning Vinci, Small World is inhabited by a zany cast of characters such as dwarves, wizards, amazons, giants, orcs, and even humans, who use their troops to occupy territory and conquer adjacent lands in order to push the other races off …",
    "owners": [
     {
      "id": 4,
@@ -2154,6 +2464,9 @@
    "category": "Racing",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/0bcsOFsY1fRas12uNKhoXg__medium/img/3JjIS7tpHT4U-EpATAE6120XV_c=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8079561.jpg",
+   "bggId": 400203,
+   "websiteUrl": null,
+   "description": "Listen all of you, bellyslitherers! Gather around… and prove your mettle!\nThere’s no peace on Gastropodia Islands. Especially not when all kinds of snails grab their weapons and face each other in deadly combat. Each squad is ready to show the other mollusks who’s the boss. They’ll do anything to stand victorious. Bazookas, Molotov cocktails, mines, barrels full of toxic waste, axes and swords… These are their tools …",
    "owners": [
     {
      "id": 4,
@@ -2172,6 +2485,9 @@
    "category": "Economic",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/vNFe4JkhKAERzi4T0Ntwpw__medium/img/NwPz9FPGILiavsbrex30JC_7FwQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8234167.png",
+   "bggId": 148228,
+   "websiteUrl": "https://www.spacecowboys.fr/splendor-english",
+   "description": "Splendor is a game of chip-collecting and card development. Players are merchants of the Renaissance trying to buy gem mines, means of transportation, shops—all in order to acquire the most prestige points. If you're wealthy enough, you might even receive a visit from a noble at some point, which of course will further increase your prestige.\nOn your turn, you may (1) collect chips (gems), or (2) buy and build a card …",
    "owners": [
     {
      "id": 2,
@@ -2195,20 +2511,13 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/EsJqPL5CB_TMt0MYL-lnVg__medium/img/ZRO5U2YmUjlVnNntZagrjKgD4UQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1903816.jpg",
+   "bggId": 147020,
+   "websiteUrl": "http://starrealms.com/",
+   "description": "Star Realms is a spaceship combat deck-building game by Magic Hall of Famers Darwin Kastle (The Battle for Hill 218) and Rob Dougherty (Ascension Co-designer). It combines the fun of a deck-building game with the speed and interactivity of Trading Card Game style combat. In Star Realms, players make use of Ships and Bases to generate Trade to acquire new Ships and Bases or to generate Combat to attack their opponent …",
    "owners": [
     {
      "id": 2,
      "displayName": "Brocks",
-     "loanedToName": null
-    },
-    {
-     "id": 3,
-     "displayName": "Harris",
-     "loanedToName": null
-    },
-    {
-     "id": 1,
-     "displayName": "Stephensons",
      "loanedToName": null
     }
    ]
@@ -2223,6 +2532,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/wn1LAdKnmLSqSHpwp69_pA__medium/img/j1t8gDOMvYCngKNU1EpCtZToBhI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1248093.jpg",
+   "bggId": 3284,
+   "websiteUrl": null,
+   "description": "Individual battles between famous Star Wars characters set on different board locations. Players choose a major character that is accompanied by one or two minor characters. Each set of characters has its own deck of cards which are used for attack, defense, or special abilities. Each deck is unique with certain special powers relevant to the major character. There are different modes of play; one-on-one battles, up …",
    "owners": [
     {
      "id": 4,
@@ -2251,6 +2563,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/pIQ_MXvaoARRp1loCHJuHg__medium/img/RTsOUL5hr7rs2NEW3IuoyYIz6UM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2247647.jpg",
+   "bggId": 164153,
+   "websiteUrl": "http://www.fantasyflightgames.com/en/products/star-wars-imperial-assault/",
+   "description": "Star Wars: Imperial Assault is a strategy board game of tactical combat and missions for two to five players, offering two distinct games of battle and adventure in the Star Wars universe!\nImperial Assault puts you in the midst of the Galactic Civil War between the Rebel Alliance and the Galactic Empire after the destruction of the Death Star over Yavin 4. In this game, you and your friends can participate in two sep …",
    "owners": [
     {
      "id": 6,
@@ -2269,6 +2584,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 114,
    "imageUrl": "https://cf.geekdo-images.com/Cv11Gl9bsPAaOMppKceZxQ__medium/img/1CZ-kxbCrGZXhS6O4LU1W_6Q2L0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic2473289.jpg",
+   "bggId": 175211,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/star-wars-imperial-assault/products/twin-shadows",
+   "description": "Investigate a growing Imperial presence in Twin Shadows, a new expansion for Imperial Assault! New dangers lurk in every shadow and darkened alley on Tatooine, home of bounty hunters and galactic scum. To make matters worse, Han Solo has disappeared while on assignment in Mos Eisley. Now, a crack team of elite Rebel operatives launches their investigation to uncover the truth behind the Imperial plot.\nThis expansion …",
    "owners": [
     {
      "id": 6,
@@ -2287,6 +2605,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/J8wVWdlnRJfZbHYpF4GLLQ__medium/img/ts5AP2gUATfbPNwECtJqhKlA5MY=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6583306.jpg",
+   "bggId": 353470,
+   "websiteUrl": "https://www.zmangames.com/en/products/star-wars-jabbas-palace/",
+   "description": "The lair of Jabba, the Hutt is a place of danger and deception. Players compete using members of the Rebel Alliance and denizens of Jabba’s Palace in a game of rebel bravery and vile deceit.\nBased on the beloved card game and set in the Star Wars galaxy, Star Wars: Jabba’s Palace - A Love Letter Game retains the simple and fun mechanics of the original as you utilize the talents of iconic characters from Return of th …",
    "owners": [
     {
      "id": 1,
@@ -2305,6 +2626,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/RjwAj6hw5aEMGvosEA12gw__medium/img/m028Hj-H9fYO_tn10prK9Ng_a6s=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5879810.jpg",
+   "bggId": 271896,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/star-wars-outer-rim/",
+   "description": "Take to the stars and become a living legend in Star Wars: Outer Rim, a game of bounty hunters, mercenaries, and smugglers for 1-4 players!\nIn Outer Rim, you take on the role of an underworld denizen, setting out to make your mark on the galaxy. You'll travel the outer rim in your personal ship, hire legendary Star Wars characters to join your crew, and try to become the most famous (or infamous) outlaw in the galaxy …",
    "owners": [
     {
      "id": 4,
@@ -2338,6 +2662,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 82,
    "imageUrl": "https://cf.geekdo-images.com/Etx7v8SttOJVgH0isPcF0w__medium/img/keOdn0KwU_2St-aH7hCdSiGCRTI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6881848.jpg",
+   "bggId": 347102,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/star-wars-outer-rim/products/unfinished-business-expansion/",
+   "description": "You’ve made a name for yourself in the Outer Rim, but there is still Unfinished Business. Hyperlanes through the Core Worlds hold the promise of untapped opportunities. The market is flush with new merchandise, from valuable cargo to tools of the trade. Just watch your step; the latest crop of bounties is even deadlier, and your rivals are looking to take you down!\nUnfinished Business, an expansion for Star Wars: Out …",
    "owners": [
     {
      "id": 2,
@@ -2361,6 +2688,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/7SrPNGBKg9IIsP4UQpOi8g__medium/img/Uf2RoehUzaKsugpGuZvi-8wuJLE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4325841.jpg",
+   "bggId": 187645,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/star-wars-rebellion/",
+   "description": "Star Wars: Rebellion is a board game of epic conflict between the Galactic Empire and Rebel Alliance for two to four players.\nExperience the Galactic Civil War like never before. In Rebellion, you control the entire Galactic Empire or the fledgling Rebel Alliance. You must command starships, account for troop movements, and rally systems to your cause. Given the differences between the Empire and Rebel Alliance, each …",
    "owners": [
     {
      "id": 1,
@@ -2379,6 +2709,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 84,
    "imageUrl": "https://cf.geekdo-images.com/776PfVZJzSr6aMUaQYhKBg__medium/img/Qszus53JrOYtSSqg4wQ-hwdh_Xo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3555413.jpg",
+   "bggId": 226840,
+   "websiteUrl": "https://www.fantasyflightgames.com/en/products/star-wars-rebellion/products/rise-empire/",
+   "description": "Description from the publisher:\n\"Our Rebellion is all that remains to push back the Empire. We think you may be able to help us.\"\n–Mon Mothma\nNew leaders. New missions. New tactic cards that lead to more fully cinematic combats… Rise of the Empire is an expansion for Star Wars: Rebellion inspired largely by the movie Rogue One: A Star Wars Story. And just as the movie provided new insight into the Galactic Civil War …",
    "owners": [
     {
      "id": 2,
@@ -2407,6 +2740,9 @@
    "category": "Science Fiction",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/BWJifOg8hZrn-ntwf5YR_w__medium/img/i3IX_6puWIIKwotLjNnUyY-FAXo=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7453690.png",
+   "bggId": 385408,
+   "websiteUrl": "https://funkogames.com/star-wars-rivals/",
+   "description": "Star Wars: Rivals is an expandable card game in which the light and dark sides of the Force face off, with each player building a squadron from characters throughout different eras of the Star Wars universe.\nStar Wars: Rivals – Series 1 – Premier Set includes four characters — Luke Skywalker and Commander Cody vs. Darth Vader and Asajj Ventress — 14 action cards, 18 tokens and markers, 12 location cards, and a prism …",
    "owners": [
     {
      "id": 3,
@@ -2425,6 +2761,9 @@
    "category": "Video Game Theme",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/X1oNtZV5H5BxtxlsTGIsHA__medium/img/C9OkfdKnXdQjCDmtaAM5osvRoVg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6037615.png",
+   "bggId": 332290,
+   "websiteUrl": "https://shop.stardewvalley.net",
+   "description": "A cooperative board game of farming and friendship based on the Stardew Valley video game by Eric Barone. Work together with your fellow farmers to save the Valley from the nefarious JojaMart Corporation! To do this, you'll need to farm, fish, friend and find all kinds of different resources to fulfill your Grandpa's Goals and restore the Community Center. Collect all kinds of items, raise animals, and explore the Mi …",
    "owners": [
     {
      "id": 1,
@@ -2443,6 +2782,9 @@
    "category": "Card Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/YMh3d_JC-mTNFGPp8KS4wg__medium/img/S4a51Gp4AeLZWx-U1ocKbqIo1bE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3750065.png",
+   "bggId": 224904,
+   "websiteUrl": "http://www.pencilfirstgames.com/sunset-over-water/",
+   "description": "Description from the publisher:\nTHE BEAUTIFUL WILDERNESS\nSometimes you need to get off the beaten path to find a beautiful landscape to paint. Wake up early, hike deep into nature, and find your perfect spot. Some paintings sell for commissions, others you’ll keep for yourself, but you’re always going that extra mile to find inspiration.\nOBJECTIVE\nOver six days, players gain Renown by hiking to beautiful locations to …",
    "owners": [
     {
      "id": 1,
@@ -2461,6 +2803,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/aCD3Yc5uGBCk3SQUU6076A__medium/img/zLTSXAsSk0nJXbHqskw69RJeMpM=/fit-in/500x500/filters:no_upscale():strip_icc()/pic200934.jpg",
+   "bggId": 3623,
+   "websiteUrl": null,
+   "description": "This game is based on the TV show of the same name. The setting is a desert island. First as teams, then as individuals, players engage in a number of activities, including answering riddles, guessing items from a series of clues, guessing teammates' answers to Scruples-style questions, and Pictionary-like drawing competitions. Winners obtain tokens representing survival items such as food and matches, which are usef …",
    "owners": [
     {
      "id": 2,
@@ -2479,6 +2824,9 @@
    "category": "Card Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/2f9uTicUSXkdPp2Yks6zFw__medium/img/KWQdFTRZJ24DUNQN3W9qEZn4KQg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5885689.jpg",
+   "bggId": 192291,
+   "websiteUrl": "http://www.gamewright.com/gamewright/index.php?section=games&page=game&show=318#",
+   "description": "Sushi Go Party! expands Sushi Go! with a party platter of mega maki, super sashimi, and endless edamame. You still earn points by picking winning sushi combos, but now you can customize each game by choosing la carte from a menu of more than twenty delectable dishes. What's more, up to eight players can join in on the sushi-feast. Let the good times roll!\n—description from the publisher",
    "owners": [
     {
      "id": 2,
@@ -2507,6 +2855,9 @@
    "category": "Civilization",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/7kqDmkUMGxXHr1wNPA7Gvg__medium/img/F8_KE1fiQkMkw1bROJzXx5ChKOc=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4884996.jpg",
+   "bggId": 286096,
+   "websiteUrl": "https://stonemaiergames.com/games/tapestry/",
+   "description": "Tapestry is a two-hour game for 1-5 players designed by Jamey Stegmaier.\nCreate the civilization with the most storied history, starting at the beginning of humankind and reaching into the future. The paths you choose will vary greatly from real-world events or people — your civilization is unique!\nIn Tapestry, you start from nothing and advance on any of the four advancement tracks (science, technology, exploration, …",
    "owners": [
     {
      "id": 1,
@@ -2525,6 +2876,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 90,
    "imageUrl": "https://cf.geekdo-images.com/StifZJFYLxR4DJ3vyaeBnw__medium/img/8nVrpZ6WDsavVHrEcmXuNYBLpyE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6489720.jpg",
+   "bggId": 349998,
+   "websiteUrl": "https://stonemaiergames.com/games/tapestry/tapestry-arts-architecture-expansion/",
+   "description": "Choose from a variety of new capital city mats, a new advancement track featuring new types of cards and tiles, plus more civilizations, tapestry cards, tech cards, and landmark cards/miniatures in this second expansion for Tapestry.\n—description from the publisher",
    "owners": [
     {
      "id": 3,
@@ -2548,6 +2902,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 90,
    "imageUrl": "https://cf.geekdo-images.com/uDi09FWY0jD_sB7fMtXJNQ__medium/img/dmJtQRQGyL4XwEih7ZwzmvIo-pA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7320021.png",
+   "bggId": 379578,
+   "websiteUrl": "https://stonemaiergames.com/games/tapestry/tapestry-fantasies-futures-expansion/",
+   "description": "Parallel universes are abundant in the world of Tapestry. The Fantasies & Futures expansion gives players the opportunity to build civilizations using fantasy and sci-fi inspired civs, technology, tapestries, and cities.\nComponents\nIn this third and final expansion to Tapestry, 10 new civilizations, 6 advanced capital city mats, 38 new tapestry cards, and 12 new tech cards are accompanied by a comprehensive rulebook …",
    "owners": [
     {
      "id": 1,
@@ -2566,6 +2923,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 90,
    "imageUrl": "https://cf.geekdo-images.com/bK6d6GP8kJp8k1jBos3phA__medium/img/Es0TM2npXVTU6C5dt0yU4z4lnpk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5592530.jpg",
+   "bggId": 315708,
+   "websiteUrl": "https://stonemaiergames.com/games/tapestry/tapestry-plans-ploys-expansion/",
+   "description": "Choose from a variety of new civilizations, pursue individual achievements to add landmarks to your capital city, and sneakily interact with the opposition in this first expansion for Tapestry.\n—description from the publisher",
    "owners": [
     {
      "id": 1,
@@ -2584,6 +2944,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/wg9oOLcsKvDesSUdZQ4rxw__medium/img/yNEPZ5O5Ab2HFsgq44fiwjSu5YI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3536616.jpg",
+   "bggId": 167791,
+   "websiteUrl": "http://www.fryxgames.se/games/terraforming-mars/",
+   "description": "In the 2400s, mankind begins to terraform the planet Mars. Giant corporations, sponsored by the World Government on Earth, initiate huge projects to raise the temperature, the oxygen level, and the ocean coverage until the environment is habitable. In Terraforming Mars, you play one of those corporations and work together in the terraforming process, but compete for getting victory points that are awarded not only fo …",
    "owners": [
     {
      "id": 2,
@@ -2602,6 +2965,9 @@
    "category": "Movies / TV / Radio theme",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/gHYSl8HcAnWHTmhZNb6NQQ__medium/img/QNpRUTgHqqGx4CfN_c4sitBlJZ8=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6871773.jpg",
+   "bggId": 363252,
+   "websiteUrl": null,
+   "description": "In The Great British Baking Show Game, players take the role of bakers on the show and race each other to recreate the configuration of baking cards shown on the recipe cards. Players need to choose whether to move quickly at all costs, or whether to take more time to select the best flavors for their bake and avoid the dreaded \"soggy\" cards.\nTo capture the sportsmanship demonstrated when bakers step in to assist oth …",
    "owners": [
     {
      "id": 1,
@@ -2620,6 +2986,9 @@
    "category": "Adventure",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/kUUe9IpbGDMypi0nB79zog__medium/img/JPiYdXv0zmeYlBGDEBeZzldC_nI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1478103.jpg",
+   "bggId": 133063,
+   "websiteUrl": null,
+   "description": "Players assume the roles of characters from the books/movies, including the members of the Fellowship (Gandalf, Aragorn, Boromir, Gimli, Legolas, Frodo, Sam, Pippin, or Merry) and one player assumes the role of Sauron. The board is made of up 12 hexagonal tiles to create a hex-based map of Middle Earth. Players move across the map and battle Sauron's forces in an effort to destroy the One Ring at Mount Doom. The game …",
    "owners": [
     {
      "id": 6,
@@ -2638,25 +3007,13 @@
    "category": "Medieval",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/qXT1U-nFh9PE8ujfdmI7dA__medium/img/o57dm9vC5nsHHJxTO9jZ5N5DG0M=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7754663.jpg",
+   "bggId": 371942,
+   "websiteUrl": "https://devirgames.com/the-white-castle",
+   "description": "The heron flies over the Himeji sky while the Daimyo, from the top of the castle, watches his servants move. Gardeners tend the pond, where the koi carp live, warriors stand guard on the walls, and courtiers crowd the gates, pining for an audience that brings them closer to the innermost circles of the court. When night falls, the lanterns are lit and the workers return to their clan.\nIn The White Castle, players wil …",
    "owners": [
     {
      "id": 4,
      "displayName": "Bells",
-     "loanedToName": null
-    },
-    {
-     "id": 2,
-     "displayName": "Brocks",
-     "loanedToName": null
-    },
-    {
-     "id": 3,
-     "displayName": "Harris",
-     "loanedToName": null
-    },
-    {
-     "id": 1,
-     "displayName": "Stephensons",
      "loanedToName": null
     }
    ]
@@ -2671,6 +3028,9 @@
    "category": "Trains",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/kdWYkW-7AqG63HhqPL6ekA__medium/img/s2Ocbt5vJ9A1aZLZaGTNWuSvung=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8937637.jpg",
+   "bggId": 9209,
+   "websiteUrl": "https://www.daysofwonder.com/tickettoride/en/usa/",
+   "description": "With elegantly simple gameplay, Ticket to Ride can be learned in under 15 minutes. Players collect cards of various types of train cars they then use to claim railway routes in North America. The longer the routes, the more points they earn. Additional points come to those who fulfill Destination Tickets – goal cards that connect distant cities; and to the player who builds the longest continuous route.\n\"The rules ar …",
    "owners": [
     {
      "id": 2,
@@ -2699,6 +3059,9 @@
    "category": "Pirates",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/60O76oFmWKsrnW6JCjn_xw__medium/img/kHckgm_emjTVQsSqGHTpepb5LSI=/fit-in/500x500/filters:no_upscale():strip_icc()/pic581831.jpg",
+   "bggId": 7944,
+   "websiteUrl": null,
+   "description": "The Caribbean Sea is the scene where Pirates board European Colonialist Galleons in order to plunder treasure. In Tortuga every player plays the part of the leader of a Pirate’s clan. He tries to board in the best way for himself while simultaneously preventing his opponents from successfully boarding.\nTo do this he will have to choose which ship to board, the best weather conditions and the best strategy to use duri …",
    "owners": [
     {
      "id": 3,
@@ -2717,6 +3080,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/YRXHX7RWbbt-JQz_Byr2bw__medium/img/CeJXNROHeanZGY5fzgTBMikOSpw=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6847352.jpg",
+   "bggId": 154428,
+   "websiteUrl": "http://www.trektheparks.com",
+   "description": "Imagine yourself staring down a giant Grizzly in Katmai National Park.\nTake a canoe ride alongside alligators in the swampy waters of the Everglades.\nTrek the trails that define our nation’s most valuable public resource – the National Parks!\nTrekking the National Parks is a spirited family board game that lets players experience the U.S. National Parks in a fun and competitive way.\nUp to six players compete in a cro …",
    "owners": [
     {
      "id": 2,
@@ -2735,6 +3101,9 @@
    "category": "Economic",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/Z2554vyl_R3BooAmi1IaWw__medium/img/ISt3XSsrpZnlwAEUT2kcHkgYXyk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1175306.jpg",
+   "bggId": 1824,
+   "websiteUrl": "https://www.boardgamecapital.com/game_rules/trump-the-game-2004.pdf",
+   "description": "In Trump: the Game players compete in two parts. In the first part, players circle the board, feeding money into the eight available properties, then bidding on those properties (not being able to see how much the property is worth) and collecting \"Trump\" cards. When all the properties are gone, the negotiation phase begins. Players use their Trump cards to buy and sell properties, some cards award huge payoffs for s …",
    "owners": [
     {
      "id": 4,
@@ -2753,6 +3122,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/kXf7mDyDYuHg6oe8yTUIEA__medium/img/DGSQO9HH0QTLYPm-fLrSUYLvdyA=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4604439.jpg",
+   "bggId": 126163,
+   "websiteUrl": "http://czechgames.com/en/tzolkin-the-mayan-calendar/",
+   "description": "Tzolkin: The Mayan Calendar presents a new game mechanism: dynamic worker placement. Players representing different Mayan tribes place their workers on giant connected gears, and as the gears rotate they take the workers to different action spots.\nDuring a turn, players can either (a) place one or more workers on the lowest visible spot of the gears or (b) pick up one or more workers. When placing workers, they must …",
    "owners": [
     {
      "id": 2,
@@ -2771,6 +3143,9 @@
    "category": "Trivia",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/cjpnlyuus586b5Ey8ajk9g__medium/img/mG6OFVlnGODlgv-xWglZ5E7CndQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic1537056.jpg",
+   "bggId": 135598,
+   "websiteUrl": null,
+   "description": "From the seller's web page:\nBring the fun of Pub Trivia to your home! Grab some friends and play everyone's favorite team trivia game. The game includes 1000 questions in 5 different categories (Entertainment, Sports and Recreation, Science, History and Anything Goes) so everyone has the chance to contribute in their area of expertise! Just like trivia night at your favorite watering hole, one person will stand up fr …",
    "owners": [
     {
      "id": 1,
@@ -2789,6 +3164,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/PwOwTVHovJAUQgghnGqCOg__medium/img/Zamuj_Ko3iuuKQnLFuzmSAlWAgQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4837710.png",
+   "bggId": 247763,
+   "websiteUrl": "https://deliciousgames.org/underwater-cities",
+   "description": "In Underwater Cities, which takes about 30-45 minutes per player, players represent the most powerful brains in the world, brains nominated due to the overpopulation of Earth to establish the best and most livable underwater areas possible.\nThe main principle of the game is card placement. Three colored cards are placed along the edge of the main board into 3 x 5 slots, which are also colored. Ideally players can pla …",
    "owners": [
     {
      "id": 2,
@@ -2807,6 +3185,9 @@
    "category": "Exploration",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/M0e9l-SHH2H4RMSAcnsDgg__medium/img/4RKOTE3OhqcgeQoDdzJeCjqU2Ds=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8658546.jpg",
+   "bggId": 2782,
+   "websiteUrl": null,
+   "description": "There are 106 cards: 5 suits (red, yellow, green, blue, purple) of 1-14, four Wild cards and 28 Action cards (Cards Up, Black Out, Pass One, Lose One). Each suit contains one special \"BIG\" card used in scoring (Red 10, Yellow 6, Green 7, Blue 12, Purple 2). Initial deal is four, Action cards in a separate stack.\nOn your turn, you turn over an Action card and follow its instructions. You then match, build or discard o …",
    "owners": [
     {
      "id": 6,
@@ -2830,10 +3211,18 @@
    "category": "Expansion for Base-game",
    "expansionOf": 101,
    "imageUrl": "https://cf.geekdo-images.com/Xf1C1NuxY1YOHPFmpmNqiw__medium/img/wJ36OJbiVlE7ftszG_5sTwzlzEU=/fit-in/500x500/filters:no_upscale():strip_icc()/pic3064278.jpg",
+   "bggId": 202174,
+   "websiteUrl": "http://stonemaiergames.com/games/viticulture/tuscany-essential-edition/",
+   "description": "Tuscany Essential Edition is an expansion for Viticulture which features the three most popular expansion modules from the original Tuscany expansion:\nExtended Board: New game board featuring four full seasons for worker placement.\nStructure Cards: New cards that players can build to supplement their existing structure figures.\nSpecial Workers: New workers with their own special abilities, which players can train.\nAl …",
    "owners": [
     {
      "id": 2,
      "displayName": "Brocks",
+     "loanedToName": null
+    },
+    {
+     "id": 1,
+     "displayName": "Stephensons",
      "loanedToName": null
     }
    ]
@@ -2848,6 +3237,9 @@
    "category": "Farming",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/l_PRU2lVlX9seScRFcvFlA__medium/img/Inq7SjRhi6KO2rcwjWdnnqE2qBg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic6500949.jpg",
+   "bggId": 183394,
+   "websiteUrl": "http://stonemaiergames.com/games/viticulture/essential-edition/",
+   "description": "In Viticulture, the players find themselves in the roles of people in rustic, pre-modern Tuscany who have inherited meagre vineyards. They have a few plots of land, an old crush pad, a tiny cellar, and three workers. They each have a dream of being the first to call their winery a true success.\nThe players are in the position of determining how they want to allocate their workers throughout the year. Every season is …",
    "owners": [
     {
      "id": 2,
@@ -2871,6 +3263,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/z4fbPdmJg_5yphJEvql4ZA__medium/img/VgtLEhgLEijYfkjElXsXX_00r8Q=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4552862.png",
+   "bggId": 23596,
+   "websiteUrl": null,
+   "description": "Write down and rank five items that fit a given category. Score a point for any item your partner also wrote down. Add an additional point if the partner gave the item the same rank as you.\nMany categories are from pop culture, eg, John Wayne Movies, but other categories provide plenty of variety, eg, Sundae Toppings.\nAppears to be a combination of partnership What Were You Thinking and Compatibility. Write down 5 th …",
    "owners": [
     {
      "id": 1,
@@ -2889,6 +3284,9 @@
    "category": "Animals",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/yLZJCVLlIx4c7eJEWUNJ7w__medium/img/I0Nh0Upyt_v_HC4C60JSXQftTLg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4458123.jpg",
+   "bggId": 266192,
+   "websiteUrl": "https://stonemaiergames.com/games/wingspan/",
+   "description": "Wingspan is a competitive, medium-weight, card-driven, engine-building board game from Stonemaier Games. It's designed by Elizabeth Hargrave and features 180 birds illustrated by Natalia Rojas and Ana Maria Martinez.\nYou are bird enthusiasts—researchers, bird watchers, ornithologists, and collectors—seeking to discover and attract the best birds to your network of wildlife preserves. Each bird extends a chain of powe …",
    "owners": [
     {
      "id": 4,
@@ -2927,6 +3325,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 104,
    "imageUrl": "https://cf.geekdo-images.com/DidRjYgGarrVcK1fXkbCIA__medium/img/abkvjm5IgyVu14AEPHfHXzr8zm0=/fit-in/500x500/filters:no_upscale():strip_icc()/pic9326617.jpg",
+   "bggId": 461932,
+   "websiteUrl": "https://stonemaiergames.com/games/wingspan/wingspan-americas-expansion/",
+   "description": "This fourth Wingspan expansion explores the birds of Mexico, Central America, South America, and the Caribbean. This incredibly biodiverse and abundant region is home to more than 3,000 bird species, including the birds with the smallest and largest wingspans in the world (the Bee Hummingbird and Snowy Albatross, respectively).\nHummingbirds make up about one tenth of the bird species in Latin America, delighting bird …",
    "owners": [
     {
      "id": 6,
@@ -2950,6 +3351,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 104,
    "imageUrl": "https://cf.geekdo-images.com/h1dRxq4lNMpuSUSGdgCmfA__medium/img/1oIuVKcQ_OXssR7k1RhuOFkrTqc=/fit-in/500x500/filters:no_upscale():strip_icc()/pic7107431.jpg",
+   "bggId": 366161,
+   "websiteUrl": "https://stonemaiergames.com/games/wingspan/wingspan-asia/",
+   "description": "Wingspan: Asia introduces the diverse and vibrant birds of the Asian continent. As always, the objective is to earn the most points by playing birds, achieving objectives, and laying eggs across your habitats. This release serves multiple roles within the Wingspan universe!\nWingspan: Asia is several different things:\n- a stand-alone game for 1 or 2 players\n- a new Duet mode for 2 players that can be combined with the …",
    "owners": [
     {
      "id": 4,
@@ -2973,6 +3377,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 104,
    "imageUrl": "https://cf.geekdo-images.com/7izK8WM_bgtvBzxQvLGz-A__medium/img/3G9jchr6oWFNepN8m18G-8p8Qkg=/fit-in/500x500/filters:no_upscale():strip_icc()/pic4982682.jpg",
+   "bggId": 290448,
+   "websiteUrl": "https://stonemaiergames.com/games/wingspan/wingspan-european-expansion/",
+   "description": "In this first expansion to Wingspan, we increase the scope of the world to include the regal, beautiful, and varied birds of Europe. These birds feature a variety of new abilities, including a number of birds with round end abilities, abilities that increase interaction between players, and birds that benefit from excess cards/food. Along with the new bonus cards, they’re designed to be shuffled into the original dec …",
    "owners": [
     {
      "id": 6,
@@ -3001,6 +3408,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 104,
    "imageUrl": "https://cf.geekdo-images.com/Nl_5PvrmI6aS-1qqiJ6JAw__medium/img/CTD82BlCTSG8HcbTwzP39OqgBsQ=/fit-in/500x500/filters:no_upscale():strip_icc()/pic5685481.png",
+   "bggId": 300580,
+   "websiteUrl": "https://stonemaiergames.com/games/wingspan/wingspan-oceania-expansion/",
+   "description": "Wingspan: Oceania Expansion focuses on birds in Australia and New Zealand. It's designed by Elizabeth Hargrave and features birds illustrated by Natalia Rojas and Ana Maria Martinez.\nThis second expansion to Wingspan features colorful and awe-inspiring birds from Oceania. The Oceania bird cards are designed to be shuffled into the bird cards from the base game, with or without other expansions.\nThis expansion include …",
    "owners": [
     {
      "id": 2,
@@ -3034,6 +3444,9 @@
    "category": null,
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/cNc-FMsYo-mcRTGaXV2qcQ__medium/img/PbSLv-O0Ey7Ws_bhbxbEisp3uIE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8894992.jpg",
+   "bggId": 410201,
+   "websiteUrl": "https://stonemaiergames.com/games/wyrmspan/",
+   "description": "You are an amateur dracologist in the world of Wyrmspan, a place where dragons of all shapes, sizes, and colors roam the skies. Excavate a hidden labyrinth you recently unearthed on your land and entice these beautiful creatures to roost in the sanctuary of your caves.\nDuring a game of Wyrmspan, you will build a sanctuary for dragons of all shapes and sizes. Your sanctuary begins with 3 excavated spaces—the leftmost …",
    "owners": [
     {
      "id": 6,
@@ -3052,6 +3465,9 @@
    "category": "Expansion for Base-game",
    "expansionOf": 115,
    "imageUrl": "https://cf.geekdo-images.com/JItWBskxjgKA8psXoHVCkA__medium/img/6X4fLvij2RSWmikHkKKzk-gZ4Mk=/fit-in/500x500/filters:no_upscale():strip_icc()/pic9079437.jpg",
+   "bggId": 453406,
+   "websiteUrl": "https://stonemaiergames.com/games/wyrmspan/dragon-academy/",
+   "description": "As a budding dracologist, you open an academy for fledgling dragons to achieve their full potential! The expansion to Wyrmspan adds a wide variety of new dragons and caves, objective tiles, dragon guilds, and a new round tracker that presents you with an income choice when you pass for the round. Welcome to Wyrmspan: Dragon Academy, designed by Connie Vogelmann and illustrated by Cl mentine Campardou!\n—description fr …",
    "owners": [
     {
      "id": 6,
@@ -3070,6 +3486,9 @@
    "category": "Party Game",
    "expansionOf": null,
    "imageUrl": "https://cf.geekdo-images.com/081FilFUkjvlbdRSdYQkJw__medium/img/pQcW1KMTxK-Q0WzNfQDTedshbEE=/fit-in/500x500/filters:no_upscale():strip_icc()/pic8023788.jpg",
+   "bggId": 412111,
+   "websiteUrl": null,
+   "description": "Have you ever scrolled Spotify’s top 100 list and thought to yourself, “Who the hell are these people?” or said, “8pm is too late to start a movie”? If so, then gather around with your side parts, skinny jeans, and craft beers because it’s time to play “You’re Getting Old”, a party game that proves age is just a number... but sometimes that number is higher than you'd like it to be.\nEach turn, a card is drawn with bo …",
    "owners": [
     {
      "id": 6,

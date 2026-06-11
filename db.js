@@ -90,6 +90,9 @@ for (const ddl of [
   'ALTER TABLE games ADD COLUMN category TEXT',
   'ALTER TABLE games ADD COLUMN expansion_of INTEGER REFERENCES games(id)',
   'ALTER TABLE library_entries ADD COLUMN loaned_to INTEGER REFERENCES users(id)',
+  'ALTER TABLE games ADD COLUMN bgg_id INTEGER',
+  'ALTER TABLE games ADD COLUMN description TEXT',
+  'ALTER TABLE games ADD COLUMN website_url TEXT',
 ]) {
   try {
     db.exec(ddl);
@@ -187,7 +190,7 @@ export function findOrCreateGame(data) {
   const title = data.title.trim();
   const existing = db.prepare('SELECT * FROM games WHERE title = ? COLLATE NOCASE').get(title);
   if (existing) {
-    db.prepare('UPDATE games SET year = ?, min_players = ?, max_players = ?, play_time = ?, category = ?, image_url = ? WHERE id = ?')
+    db.prepare('UPDATE games SET year = ?, min_players = ?, max_players = ?, play_time = ?, category = ?, image_url = ?, bgg_id = ? WHERE id = ?')
       .run(
         existing.year ?? data.year ?? null,
         existing.min_players ?? data.minPlayers ?? null,
@@ -195,13 +198,14 @@ export function findOrCreateGame(data) {
         existing.play_time ?? data.playTime ?? null,
         existing.category || data.category || null,
         existing.image_url || data.imageUrl || null,
+        existing.bgg_id ?? data.bggId ?? null,
         existing.id
       );
     return autoLinkExpansion(db.prepare('SELECT * FROM games WHERE id = ?').get(existing.id));
   }
   const info = db
-    .prepare('INSERT INTO games (title, year, min_players, max_players, play_time, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(title, data.year ?? null, data.minPlayers ?? null, data.maxPlayers ?? null, data.playTime ?? null, data.category || null, data.imageUrl || null);
+    .prepare('INSERT INTO games (title, year, min_players, max_players, play_time, category, image_url, bgg_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(title, data.year ?? null, data.minPlayers ?? null, data.maxPlayers ?? null, data.playTime ?? null, data.category || null, data.imageUrl || null, data.bggId ?? null);
   return autoLinkExpansion(db.prepare('SELECT * FROM games WHERE id = ?').get(info.lastInsertRowid));
 }
 
@@ -232,6 +236,8 @@ export function gameToJson(g) {
     category: g.category,
     expansionOf: g.expansion_of,
     imageUrl: g.image_url,
+    bggId: g.bgg_id,
+    websiteUrl: g.website_url,
   };
 }
 

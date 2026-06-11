@@ -39,6 +39,7 @@ const rows = db
   .prepare(
     `SELECT g.id, g.title, g.year, g.min_players AS minPlayers, g.max_players AS maxPlayers,
             g.play_time AS playTime, g.category, g.expansion_of AS expansionOf, g.image_url AS imageUrl,
+            g.bgg_id AS bggId, g.website_url AS websiteUrl, g.description,
             u.id AS ownerId, u.display_name AS ownerName, lb.display_name AS loanedToName
      FROM crew_members cm
      JOIN library_entries le ON le.user_id = cm.user_id
@@ -55,7 +56,10 @@ for (const r of rows) {
   if (!byGame.has(r.id)) {
     byGame.set(r.id, {
       id: r.id, title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers,
-      playTime: r.playTime, category: r.category, expansionOf: r.expansionOf, imageUrl: r.imageUrl, owners: [],
+      playTime: r.playTime, category: r.category, expansionOf: r.expansionOf, imageUrl: r.imageUrl,
+      bggId: r.bggId, websiteUrl: r.websiteUrl,
+      description: r.description ? (r.description.length > 420 ? r.description.slice(0, 420).trimEnd() + ' …' : r.description) : null,
+      owners: [],
     });
   }
   byGame.get(r.id).owners.push({ id: r.ownerId, displayName: r.ownerName, loanedToName: r.loanedToName || null });

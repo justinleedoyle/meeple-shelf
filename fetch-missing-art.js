@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, normTitle } from './db.js';
+import { getThing, applyThingMeta } from './bgg-meta.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,22 +43,7 @@ const BUILTIN_MAP = {
 
 const manualMap = { ...BUILTIN_MAP, ...(process.argv[2] ? JSON.parse(process.argv[2]) : {}) };
 
-const UA = { 'User-Agent': 'MeepleShelf/1.0 (personal board game library)' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function geekJson(url) {
-  const res = await fetch(url, { headers: UA });
-  if (!res.ok) return null;
-  return res.json();
-}
-
-async function imageUrlFor(bggObjectId) {
-  const item = (await geekJson(`https://api.geekdo.com/api/geekitems?objectid=${bggObjectId}&objecttype=thing`))?.item;
-  if (!item?.imageid) return null;
-  await sleep(200);
-  const img = await geekJson(`https://api.geekdo.com/api/images/${item.imageid}`);
-  return img?.images?.medium?.url || img?.images?.itempage?.url || null;
-}
 
 // token sets for fuzzy expansion-name matching
 const STOP = new Set(['the', 'a', 'an', 'and', 'of', 'for', 'expansion']);
@@ -79,20 +65,22 @@ const bggIdForTitle = (title) => {
   return catalogByNorm.get(ALIASES.get(n) ?? n)?.i ?? null;
 };
 
-const artless = db.prepare('SELECT * FROM games WHERE image_url IS NULL').all();
-console.log(`${artless.length} game(s) without art…`);
+const incomplete = db
+  .prepare('SELECT * FROM games WHERE bgg_id IS NULL OR description IS NULL OR image_url IS NULL')
+  .all();
+console.log(`${incomplete.length} game(s) missing BGG id, description, or art…`);
 const unresolved = [];
 let filled = 0;
 
-for (const game of artless) {
+for (const game of incomplete) {
   try {
-    let bggId = manualMap[game.title] ?? manualMap[String(game.id)] ?? null;
+    let bggId = game.bgg_id ?? manualMap[game.title] ?? manualMap[String(game.id)] ?? null;
 
     if (!bggId && game.expansion_of) {
       const base = db.prepare('SELECT * FROM games WHERE id = ?').get(game.expansion_of);
-      const baseBggId = base && bggIdForTitle(base.title);
+      const baseBggId = base && (base.bgg_id ?? bggIdForTitle(base.title));
       if (baseBggId) {
-        const item = (await geekJson(`https://api.geekdo.com/api/geekitems?objectid=${baseBggId}&objecttype=thing`))?.item;
+        const item = await getThing(baseBggId);
         await sleep(200);
         const ours = tokens(game.title);
         const candidates = (item?.links?.boardgameexpansion || [])
@@ -109,10 +97,9 @@ for (const game of artless) {
       unresolved.push(game);
       continue;
     }
-    const url = await imageUrlFor(bggId);
-    await sleep(200);
-    if (url) {
-      db.prepare('UPDATE games SET image_url = ? WHERE id = ?').run(url, game.id);
+    const ok = await applyThingMeta(db, game, Number(bggId));
+    await sleep(250);
+    if (ok) {
       console.log(`  ✓ ${game.title}`);
       filled++;
     } else {
@@ -123,8 +110,8 @@ for (const game of artless) {
   }
 }
 
-console.log(`\nFilled ${filled} of ${artless.length}.`);
+console.log(`\nFilled ${filled} of ${incomplete.length}.`);
 if (unresolved.length) {
-  console.log('Unresolved (supply via manual map {gameId: bggObjectId}):');
+  console.log('Unresolved (supply via manual map {"Exact Title": bggObjectId}):');
   for (const g of unresolved) console.log(`  #${g.id}  ${g.title}`);
 }

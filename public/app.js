@@ -370,7 +370,7 @@ async function viewLibrary() {
     if (q) list = list.filter((en) => en.game.title.toLowerCase().includes(q));
     if (libState.sort === 'title') list.sort((a, b) => a.game.title.localeCompare(b.game.title));
     grid.innerHTML = list.length
-      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo })).join('')}</div>`
+      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, gameId: en.game.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo })).join('')}</div>`
       : emptyState('🔍', 'No matches', 'No games on your shelf match that search.');
   }
   renderGrid();
@@ -392,7 +392,11 @@ async function viewLibrary() {
   if ($('#lib-grid')) {
     $('#lib-grid').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-act]');
-      if (!btn) return;
+      if (!btn) {
+        const card = e.target.closest('[data-game]');
+        if (card && !clickedControl(e)) openGameModal(Number(card.dataset.game));
+        return;
+      }
       const card = e.target.closest('[data-entry]');
       const entry = byId.get(card.dataset.entry);
       if (!entry) return;
@@ -983,10 +987,17 @@ async function viewCrewDetail(id) {
       return;
     }
     const btn = e.target.closest('[data-act="owners"]');
-    if (!btn) return;
+    if (btn) {
+      const card = e.target.closest('[data-game]');
+      const game = games.find((g) => g.id === Number(card.dataset.game));
+      if (game) openOwnersModal(crew, game, members);
+      return;
+    }
     const card = e.target.closest('[data-game]');
-    const game = games.find((g) => g.id === Number(card.dataset.game));
-    if (game) openOwnersModal(crew, game, members);
+    if (card && !clickedControl(e)) {
+      const game = games.find((g) => g.id === Number(card.dataset.game));
+      openGameModal(Number(card.dataset.game), { owners: game?.owners });
+    }
   });
 
   // ---- leaderboard ----
@@ -1223,6 +1234,45 @@ async function viewCrewDetail(id) {
   };
 }
 
+// Tap a card → description, details, and links to learn more about the game.
+async function openGameModal(gameId, extras = {}) {
+  let game;
+  try {
+    ({ game } = await api('/games/' + gameId));
+  } catch (err) {
+    toast(err.message);
+    return;
+  }
+  const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
+  openModal(`
+    <div class="modal-head"><h2>${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</h2><button class="modal-close">×</button></div>
+    <div class="modal-body">
+      <div class="gd-top">
+        <div class="gd-cover" style="background:linear-gradient(135deg, ${grad[0]}, ${grad[1]})">
+          ${game.imageUrl ? `<img src="${esc(game.imageUrl)}" alt="" onerror="this.remove()">` : `<span class="cover-letter" style="font-size:42px">${esc(game.title[0].toUpperCase())}</span>`}
+        </div>
+        <div class="gd-meta">
+          <div class="card-meta">
+            ${fmtPlayers(game) ? `<span class="badge">${fmtPlayers(game)}</span>` : ''}
+            ${fmtTime(game) ? `<span class="badge">${fmtTime(game)}</span>` : ''}
+            ${game.category ? `<span class="badge">${esc(game.category)}</span>` : ''}
+          </div>
+          ${extras.owners?.length ? `<div class="card-owners" style="margin-top:10px">${extras.owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}` : ''}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>
+      <p class="gd-desc">${game.description ? esc(game.description) : '<em>No description available yet.</em>'}</p>
+      <div class="gd-links">
+        ${game.websiteUrl ? `<a class="btn" href="${esc(game.websiteUrl)}" target="_blank" rel="noopener">Official site ↗</a>` : ''}
+        ${game.bggId ? `<a class="btn" href="https://boardgamegeek.com/boardgame/${game.bggId}" target="_blank" rel="noopener">BoardGameGeek ↗</a>` : ''}
+      </div>
+    </div>`);
+}
+
+// shared helper: was this card click on an interactive control?
+function clickedControl(e) {
+  return e.target.closest('button, a, input, select, [data-act], [data-add], [data-pack]');
+}
+
 // Set exactly who in the crew owns a game — mirrors editing a row of the old spreadsheet.
 function openOwnersModal(crew, game, members) {
   openModal(`
@@ -1287,13 +1337,19 @@ async function viewPublicShelf(slug) {
       </div>
     </div>
     ${entries.length
-      ? `<div class="grid">${entries.map((en) => gameCardHtml(en.game, { notes: en.notes })).join('')}</div>`
+      ? `<div class="grid" id="pub-grid">${entries.map((en) => gameCardHtml(en.game, { gameId: en.game.id, notes: en.notes })).join('')}</div>`
       : emptyState('🎲', 'Nothing here yet', `${esc(owner.displayName)} hasn't added any games.`)}
     <div class="public-footer">
       Shared with <strong>Meeple Shelf</strong> — your board game shelf, your friends' shelves, one combined library.
       ${state.user ? `<a href="#/library">Back to my shelf</a>` : `<a href="#/welcome">Make your own →</a>`}
     </div>
   </div>`;
+  if ($('#pub-grid')) {
+    $('#pub-grid').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-game]');
+      if (card && !clickedControl(e)) openGameModal(Number(card.dataset.game));
+    });
+  }
 }
 
 // ===================== boot =====================

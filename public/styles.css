@@ -234,6 +234,7 @@ select { width: auto; padding: 8px 10px; }
   overflow: hidden;
   position: relative;
   transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+  cursor: pointer;
 }
 .game-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); background: var(--card-hover); }
 .cover {
@@ -537,6 +538,32 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 .owner-row .m-name { font-weight: 700; font-size: 14px; }
 .owner-row select.loc { width: auto; max-width: 46%; font-size: 13px; padding: 6px 8px; }
 .owner-row select.loc:disabled { opacity: 0.35; }
+
+/* game detail modal */
+.gd-top { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 8px; }
+.gd-cover {
+  width: 124px;
+  height: 124px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gd-cover img { width: 100%; height: 100%; object-fit: cover; }
+.gd-meta { flex: 1; min-width: 0; padding-top: 4px; }
+.gd-desc {
+  white-space: pre-line;
+  color: var(--text);
+  opacity: 0.92;
+  font-size: 14.5px;
+  line-height: 1.6;
+  max-height: 38vh;
+  overflow-y: auto;
+  margin: 10px 0 4px;
+}
+.gd-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 
 /* leaderboard */
 .stats-head {

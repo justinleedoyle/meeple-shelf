@@ -2,6 +2,7 @@ import express from 'express';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyThingMeta, mediumImageUrl } from './bgg-meta.js';
 import {
   db,
   verifyPassword,
@@ -22,7 +23,7 @@ const catalog = JSON.parse(readFileSync(path.join(__dirname, 'data', 'popular-ga
 let bggCatalog = [];
 try {
   bggCatalog = JSON.parse(readFileSync(path.join(__dirname, 'data', 'bgg-catalog.json'), 'utf8'))
-    .map((g) => ({ title: g.t, tl: g.t.toLowerCase(), year: g.y, rank: g.r ?? 1e9, imageUrl: g.im }));
+    .map((g) => ({ title: g.t, tl: g.t.toLowerCase(), year: g.y, rank: g.r ?? 1e9, imageUrl: g.im, bggId: g.i }));
 } catch {
   /* dataset not present */
 }
@@ -108,6 +109,7 @@ function validateGameInput(body) {
     playTime: intOrNull(body.playTime, 1, 6000),
     category: String(body.category || '').trim().slice(0, 60) || null,
     imageUrl: imageUrl || null,
+    bggId: intOrNull(body.bggId, 1, 99999999),
   };
 }
 
@@ -224,7 +226,7 @@ app.get('/api/games/search', requireAuth, (req, res) => {
     .filter((g) => g.tl.includes(q))
     .sort((a, b) => a.rank - b.rank)
     .slice(0, 15)
-    .map((g) => ({ source: 'bgg', title: g.title, year: g.year, imageUrl: g.imageUrl }));
+    .map((g) => ({ source: 'bgg', title: g.title, year: g.year, imageUrl: g.imageUrl, bggId: g.bggId }));
 
   // Merge by title+year. Community first (has a gameId), then the curated catalog
   // (has player counts / play time), then BGG (has cover art) — later sources fill
@@ -237,7 +239,7 @@ app.get('/api/games/search', requireAuth, (req, res) => {
       seen.set(key, { ...r });
       continue;
     }
-    for (const f of ['minPlayers', 'maxPlayers', 'playTime', 'category', 'imageUrl']) ex[f] = ex[f] ?? r[f];
+    for (const f of ['minPlayers', 'maxPlayers', 'playTime', 'category', 'imageUrl', 'bggId']) ex[f] = ex[f] ?? r[f];
   }
   const results = [...seen.values()].sort(
     (a, b) =>
@@ -247,22 +249,22 @@ app.get('/api/games/search', requireAuth, (req, res) => {
   res.json({ results: results.slice(0, 12) });
 });
 
-// Fire-and-forget: swap a freshly added game's 64px micro thumbnail for the
-// 500px version via BGG's public image API. Failures just keep the micro.
-async function upgradeGameImage(game) {
+// Fire-and-forget: enrich a freshly added game from BGG's open endpoints —
+// description, official website, and 500px art (replacing micro thumbnails).
+async function upgradeGameMeta(game) {
   try {
+    if (game?.bgg_id && (!game.description || !game.image_url || game.image_url.includes('__micro'))) {
+      await applyThingMeta(db, game, game.bgg_id);
+      return;
+    }
+    // no BGG id known — at least upgrade a micro thumbnail via its image id
     if (!game?.image_url?.includes('__micro')) return;
     const m = game.image_url.match(/pic(\d+)\.[a-z]+$/i);
     if (!m) return;
-    const res = await fetch(`https://api.geekdo.com/api/images/${m[1]}`, {
-      headers: { 'User-Agent': 'MeepleShelf/1.0 (personal board game library)' },
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    const url = data?.images?.medium?.url || data?.images?.itempage?.url;
+    const url = await mediumImageUrl(m[1]);
     if (url) db.prepare('UPDATE games SET image_url = ? WHERE id = ?').run(url, game.id);
   } catch {
-    /* keep the micro thumbnail */
+    /* keep whatever we had */
   }
 }
 
@@ -325,7 +327,7 @@ app.post('/api/library', requireAuth, (req, res) => {
       .prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id, notes) VALUES (?, ?, ?)')
       .run(uid, game.id, notes).changes;
   }
-  upgradeGameImage(game); // async, non-blocking
+  upgradeGameMeta(game); // async, non-blocking
   res.status(201).json({ game: gameToJson(game), added, requested: ownerIds.length });
 });
 
@@ -374,6 +376,14 @@ app.delete('/api/library/:id', requireAuth, (req, res) => {
     .run(req.params.id, req.user.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Entry not found' });
   res.json({ ok: true });
+});
+
+// ---------- game details (public — titles and blurbs aren't secrets) ----------
+
+app.get('/api/games/:id', (req, res) => {
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  res.json({ game: { ...gameToJson(game), description: game.description } });
 });
 
 // ---------- public shared shelf ----------

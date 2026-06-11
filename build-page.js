@@ -231,6 +231,41 @@ document.querySelector('.segmented').addEventListener('click', (e) => {
   document.querySelectorAll('.segmented button').forEach((b) => b.classList.toggle('active', b === btn));
   render();
 });
+// tap a card → description + links
+const gameById = new Map(DATA.games.map((g) => [g.id, g]));
+function openDetail(g) {
+  const grad = COVER_GRADS[hashStr(g.title) % COVER_GRADS.length];
+  const root = document.createElement('div');
+  root.className = 'modal-backdrop';
+  root.innerHTML = \`
+    <div class="modal">
+      <div class="modal-head"><h2>\${esc(g.title)}\${g.year ? \` <span style="color:var(--faint);font-weight:400">(\${g.year})</span>\` : ''}</h2><button class="modal-close">×</button></div>
+      <div class="modal-body">
+        <div class="gd-top">
+          <div class="gd-cover" style="background:linear-gradient(135deg, \${grad[0]}, \${grad[1]})">
+            \${g.imageUrl ? \`<img src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : \`<span class="cover-letter" style="font-size:42px">\${esc(g.title[0].toUpperCase())}</span>\`}
+          </div>
+          <div class="gd-meta">
+            <div class="card-meta">
+              \${fmtPlayers(g) ? \`<span class="badge">\${fmtPlayers(g)}</span>\` : ''}
+              \${fmtTime(g) ? \`<span class="badge">\${fmtTime(g)}</span>\` : ''}
+              \${g.category ? \`<span class="badge">\${esc(g.category)}</span>\` : ''}
+            </div>
+            <div class="card-owners" style="margin-top:10px">\${g.owners.map((o) => \`<span class="owner-chip" style="--c:\${memberColor(o.id)}">\${esc(o.displayName)}\${o.loanedToName ? ' → ' + esc(o.loanedToName) : ''}</span>\`).join('')}</div>
+          </div>
+        </div>
+        <p class="gd-desc">\${g.description ? esc(g.description) : '<em>No description available.</em>'}</p>
+        <div class="gd-links">
+          \${g.websiteUrl ? \`<a class="btn" href="\${esc(g.websiteUrl)}" target="_blank" rel="noopener">Official site ↗</a>\` : ''}
+          \${g.bggId ? \`<a class="btn" href="https://boardgamegeek.com/boardgame/\${g.bggId}" target="_blank" rel="noopener">BoardGameGeek ↗</a>\` : ''}
+        </div>
+      </div>
+    </div>\`;
+  root.addEventListener('mousedown', (e) => { if (e.target === root) root.remove(); });
+  root.querySelector('.modal-close').onclick = () => root.remove();
+  document.body.appendChild(root);
+}
+
 document.getElementById('games').addEventListener('click', (e) => {
   const pack = e.target.closest('[data-pack]');
   if (pack) {
@@ -241,10 +276,17 @@ document.getElementById('games').addEventListener('click', (e) => {
     return;
   }
   const tog = e.target.closest('[data-toggle]');
-  if (!tog) return;
-  const id = Number(tog.dataset.toggle);
-  state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
-  render();
+  if (tog) {
+    const id = Number(tog.dataset.toggle);
+    state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+    render();
+    return;
+  }
+  const card = e.target.closest('[data-game]');
+  if (card && !e.target.closest('button, a')) {
+    const g = gameById.get(Number(card.dataset.game));
+    if (g) openDetail(g);
+  }
 });
 document.getElementById('f-packed').onclick = () => {
   state.packedOnly = !state.packedOnly;

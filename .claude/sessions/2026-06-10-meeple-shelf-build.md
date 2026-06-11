@@ -195,3 +195,16 @@ Nothing — feature-complete as scoped.
 - 8/8 API tests passed; UI verified locally (logged+deleted test play); prod
   smoke-tested (log/stats/delete) — board left at 0 plays for the trip.
 - Backlog item 1 done; static page stats view = future enhancement.
+
+## Phase 13 (same day): game detail view — descriptions + links
+- games += bgg_id, description, website_url (migrations). bgg-meta.js shared
+  module: geekitems fetch + HTML→text cleaner + applyThingMeta.
+- fetch-missing-art.js now fills id/description/website/art in one pass
+  (110/113 local, 156/158 prod — leftovers are the 2 known intentional rows).
+- GET /api/games/:id (public). Search results carry bggId; adds store it; live
+  upgradeGameMeta enriches new games (desc+site+art) fire-and-forget.
+- Tap any card (My Shelf / crew / public shelf / STATIC page) → detail modal:
+  big art, badges, owners+loans, description, Official site ↗ + BGG ↗ links.
+  Snapshot carries 420-char descriptions (~154KB total).
+- Verified: local UI modal (Wingspan → stonemaiergames.com), prod endpoint
+  smoke (7 Wonders → rprod.com), static overlay via dispatched click.
