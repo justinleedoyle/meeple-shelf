@@ -1221,3 +1221,33 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .live-timer { font-size: 34px; }
   .lv-stepper { gap: 4px; }
 }
+
+/* ===== player layer: person tagging, players leaderboard, household mgmt ===== */
+
+.owner-block { margin-bottom: 8px; }
+.owner-block > .owner-row { margin-bottom: 0; }
+.person-pick { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 2px 2px 40px; }
+.person-pick[hidden] { display: none; } /* display:flex beats the UA [hidden] rule */
+.person-chip.active {
+  background: rgba(232, 163, 61, 0.13);
+  border-color: var(--c, var(--accent));
+  color: var(--c, var(--accent-bright));
+}
+.person-chip.retired { opacity: 0.7; font-style: italic; }
+#lp-players .person-row { margin: 6px 0 0 28px; padding: 7px 12px; }
+#lp-players .person-row .m-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person-band { width: 4px; align-self: stretch; min-height: 26px; border-radius: 2px; background: var(--c); flex: none; }
+#lp-players .owner-row.has-people .lp-won { display: none; } /* people take over the crown */
+#lp-players.show-scores .owner-row.has-people input.lp-score { display: none; } /* matches the show rule's specificity */
+#lv-players .person-row .owner-main { gap: 11px; }
+#lv-crowns .chip-btn { box-shadow: inset 3px 0 0 var(--c); } /* household band survives the active fill */
+.hh-retired { opacity: 0.6; }
+.stats-head { flex-wrap: wrap; }
+
+/* player-layer review fixes */
+.hh-tag { color: var(--faint); font-weight: 600; font-size: 11px; }
+#hh-list .m-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hh-list .avatar { flex: none; }
+@media (max-width: 640px) {
+  .person-chip, .lp-won, #grain-seg button { min-height: 44px; }
+}

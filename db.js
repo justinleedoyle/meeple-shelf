@@ -80,8 +80,10 @@ CREATE INDEX IF NOT EXISTS idx_plays_crew ON plays(crew_id, played_at);
 CREATE TABLE IF NOT EXISTS play_players (
   play_id INTEGER NOT NULL REFERENCES plays(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  person_id INTEGER NOT NULL DEFAULT 0,
   won INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (play_id, user_id)
+  score INTEGER,
+  PRIMARY KEY (play_id, user_id, person_id)
 );
 
 CREATE TABLE IF NOT EXISTS loan_events (
@@ -177,8 +179,9 @@ CREATE INDEX IF NOT EXISTS idx_live_plays_crew ON live_plays(crew_id);
 CREATE TABLE IF NOT EXISTS live_play_players (
   live_play_id INTEGER NOT NULL REFERENCES live_plays(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  person_id INTEGER NOT NULL DEFAULT 0,
   score INTEGER,
-  PRIMARY KEY (live_play_id, user_id)
+  PRIMARY KEY (live_play_id, user_id, person_id)
 );
 
 CREATE TABLE IF NOT EXISTS live_play_expansions (
@@ -186,6 +189,16 @@ CREATE TABLE IF NOT EXISTS live_play_expansions (
   game_id INTEGER NOT NULL REFERENCES games(id),
   PRIMARY KEY (live_play_id, game_id)
 );
+
+CREATE TABLE IF NOT EXISTS people (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  household_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  retired_at TEXT,
+  claimed_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_people_household ON people(household_id);
 `);
 
 // migrations for databases created before these columns existed
@@ -212,6 +225,62 @@ for (const ddl of [
     /* column already exists */
   }
 }
+
+// ---- player-layer migration: add the person dimension to play rosters ----
+// PK(play_id, user_id) can't hold two siblings from one household on one play,
+// and ALTER can't change a PK — so the table is rebuilt with person_id in the
+// key. person_id=0 is the "whole household" sentinel (NULL-in-PK would let
+// duplicate household rows coexist; SQLite treats NULLs as distinct in unique
+// indexes). Legacy rows become person_id=0 rows; every existing query keeps
+// working because all inserts name their columns.
+function addPersonDimension({ table, refCol, refTable, hasWon }) {
+  const hasPersonCol = () => db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = 'person_id'`).get();
+  if (hasPersonCol()) return; // column presence IS the idempotence marker
+  db.pragma('foreign_keys = OFF'); // must happen OUTSIDE the txn — it's a silent no-op inside one
+  try {
+    // IMMEDIATE: take the write lock before the re-check, so a second process
+    // racing this boot waits on busy_timeout and then no-ops instead of dying
+    // on a snapshot-upgrade SQLITE_BUSY mid-rebuild
+    db.transaction(() => {
+      if (hasPersonCol()) return; // re-check: two dev processes can share one DB
+      db.exec(`
+        DROP VIEW IF EXISTS play_household_results;
+        DROP TABLE IF EXISTS ${table}_new;
+        CREATE TABLE ${table}_new (
+          ${refCol} INTEGER NOT NULL REFERENCES ${refTable}(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          person_id INTEGER NOT NULL DEFAULT 0,
+          ${hasWon ? 'won INTEGER NOT NULL DEFAULT 0,' : ''}
+          score INTEGER,
+          PRIMARY KEY (${refCol}, user_id, person_id)
+        );
+        INSERT INTO ${table}_new (${refCol}, user_id, person_id, ${hasWon ? 'won, ' : ''}score)
+          SELECT ${refCol}, user_id, 0, ${hasWon ? 'won, ' : ''}score FROM ${table};
+        DROP TABLE ${table};
+        ALTER TABLE ${table}_new RENAME TO ${table};
+      `);
+      const bad = db.pragma(`foreign_key_check(${table})`);
+      if (bad.length) throw new Error(`${table} person_id rebuild produced FK violations`); // throw → full rollback
+    }).immediate();
+  } finally {
+    db.pragma('foreign_keys = ON'); // restore even on throw; boot also re-asserts ON above
+  }
+}
+addPersonDimension({ table: 'play_players', refCol: 'play_id', refTable: 'plays', hasWon: true });
+addPersonDimension({ table: 'live_play_players', refCol: 'live_play_id', refTable: 'live_plays', hasWon: false });
+
+// the ONE definition of household grain: a household won a play iff any of its
+// identities (the bare household row or any tagged person) won. With zero
+// person rows this view is row-for-row identical to the table, so legacy
+// household stats are byte-identical by construction. Recreated every boot so
+// a definition change can never go stale; deliberately EXCLUDES score (scores
+// are row-grain facts — records read the raw table on purpose).
+db.exec(`
+DROP VIEW IF EXISTS play_household_results;
+CREATE VIEW play_household_results AS
+  SELECT play_id, user_id, MAX(won) AS won FROM play_players GROUP BY play_id, user_id;
+CREATE INDEX IF NOT EXISTS idx_play_players_person ON play_players(person_id);
+`);
 
 // one-shot backfill: open a loan event for copies already lent out before the
 // loan-history feature existed (idempotent — no-op once loan_events has rows).

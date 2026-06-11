@@ -256,6 +256,93 @@ app.patch('/api/me/sharing', requireAuth, (req, res) => {
   res.json({ user: userToJson({ ...req.user, library_public: isPublic }) });
 });
 
+// ---------- household people (the humans behind one login — stats identities,
+// no passwords; retire keeps history, hard delete only before any play) ----------
+
+function personToJson(p, taggedPlays = 0) {
+  return { id: p.id, name: p.name, retiredAt: p.retired_at || null, createdAt: p.created_at, taggedPlays };
+}
+
+const cleanPersonName = (raw) => String(raw || '').replace(/\s+/g, ' ').trim();
+
+app.get('/api/me/people', requireAuth, (req, res) => {
+  const people = db
+    .prepare('SELECT * FROM people WHERE household_id = ? ORDER BY (retired_at IS NOT NULL), created_at, id')
+    .all(req.user.id);
+  const counts = new Map(
+    db.prepare('SELECT person_id, COUNT(*) AS n FROM play_players WHERE person_id > 0 GROUP BY person_id')
+      .all()
+      .map((r) => [r.person_id, r.n])
+  );
+  res.json({ people: people.map((p) => personToJson(p, counts.get(p.id) || 0)) });
+});
+
+app.post('/api/me/people', requireAuth, (req, res) => {
+  const name = cleanPersonName(req.body.name);
+  if (!name || name.length > 20) {
+    return res.status(400).json({ error: 'Give them a name (up to 20 characters)' });
+  }
+  // duplicates include retired people: one human, one row, one history —
+  // re-adding "Nana" instead of un-retiring her would fork her stats
+  const dup = db
+    .prepare('SELECT 1 FROM people WHERE household_id = ? AND name = ? COLLATE NOCASE')
+    .get(req.user.id, name);
+  if (dup) return res.status(409).json({ error: 'Someone in your household already has that name' });
+  const active = db
+    .prepare('SELECT COUNT(*) AS n FROM people WHERE household_id = ? AND retired_at IS NULL')
+    .get(req.user.id).n;
+  if (active >= 12) return res.status(400).json({ error: 'Twelve people is plenty for one household' });
+  const info = db.prepare('INSERT INTO people (household_id, name) VALUES (?, ?)').run(req.user.id, name);
+  res.status(201).json({ person: personToJson(db.prepare('SELECT * FROM people WHERE id = ?').get(info.lastInsertRowid)) });
+});
+
+app.patch('/api/me/people/:pid', requireAuth, (req, res) => {
+  const person = db.prepare('SELECT * FROM people WHERE id = ? AND household_id = ?').get(req.params.pid, req.user.id);
+  if (!person) return res.status(404).json({ error: 'No such person' });
+  if (req.body.name !== undefined) {
+    const name = cleanPersonName(req.body.name);
+    if (!name || name.length > 20) {
+      return res.status(400).json({ error: 'Give them a name (up to 20 characters)' });
+    }
+    const dup = db
+      .prepare('SELECT 1 FROM people WHERE household_id = ? AND name = ? COLLATE NOCASE AND id != ?')
+      .get(req.user.id, name, person.id);
+    if (dup) return res.status(409).json({ error: 'Someone in your household already has that name' });
+    db.prepare('UPDATE people SET name = ? WHERE id = ?').run(name, person.id);
+  }
+  if (req.body.retired !== undefined) {
+    if (req.body.retired) {
+      db.prepare("UPDATE people SET retired_at = COALESCE(retired_at, datetime('now')) WHERE id = ?").run(person.id);
+    } else {
+      const active = db
+        .prepare('SELECT COUNT(*) AS n FROM people WHERE household_id = ? AND retired_at IS NULL')
+        .get(req.user.id).n;
+      if (person.retired_at && active >= 12) {
+        return res.status(400).json({ error: 'Twelve people is plenty for one household' });
+      }
+      db.prepare('UPDATE people SET retired_at = NULL WHERE id = ?').run(person.id);
+    }
+  }
+  const updated = db.prepare('SELECT * FROM people WHERE id = ?').get(person.id);
+  const tagged = db.prepare('SELECT COUNT(*) AS n FROM play_players WHERE person_id = ?').get(person.id).n;
+  res.json({ person: personToJson(updated, tagged) });
+});
+
+app.delete('/api/me/people/:pid', requireAuth, (req, res) => {
+  const person = db.prepare('SELECT * FROM people WHERE id = ? AND household_id = ?').get(req.params.pid, req.user.id);
+  if (!person) return res.status(404).json({ error: 'No such person' });
+  const referenced =
+    db.prepare('SELECT 1 FROM play_players WHERE person_id = ? LIMIT 1').get(person.id) ||
+    db.prepare('SELECT 1 FROM live_play_players WHERE person_id = ? LIMIT 1').get(person.id);
+  if (referenced) {
+    // woven into history: retire instead — the rows ARE the stats
+    db.prepare("UPDATE people SET retired_at = COALESCE(retired_at, datetime('now')) WHERE id = ?").run(person.id);
+    return res.json({ retired: true });
+  }
+  db.prepare('DELETE FROM people WHERE id = ?').run(person.id);
+  res.json({ deleted: true });
+});
+
 // ---------- crewmates (people you share a crew with — used for "add to whose shelf") ----------
 
 function crewmateIds(userId) {
@@ -584,6 +671,21 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
     )
     .all(crew.id)
     .map((m) => ({ id: m.id, displayName: m.display_name, gameCount: m.game_count }));
+  // active people per household — the log modal and live pad tag from this
+  const peopleRows = db
+    .prepare(
+      `SELECT p.id, p.household_id, p.name FROM people p
+       JOIN crew_members cm ON cm.user_id = p.household_id
+       WHERE cm.crew_id = ? AND p.retired_at IS NULL
+       ORDER BY p.name COLLATE NOCASE, p.id`
+    )
+    .all(crew.id);
+  const peopleBy = new Map();
+  for (const p of peopleRows) {
+    if (!peopleBy.has(p.household_id)) peopleBy.set(p.household_id, []);
+    peopleBy.get(p.household_id).push({ id: p.id, name: p.name });
+  }
+  for (const m of members) m.people = peopleBy.get(m.id) || [];
 
   // The combined library: every game any member owns, with its owners attached
   // (and where each copy physically is, if lent out). Wishlist entries are
@@ -769,7 +871,7 @@ function insertPlayRows({ crewId, gameId, playedAt, notes, loggedBy, hostId, pla
     )
     .run(crewId, gameId, playedAt, notes, loggedBy, hostId ?? null, durationMin ?? null, eventId ?? null, coopResult ?? null).lastInsertRowid;
   for (const p of players) {
-    db.prepare('INSERT INTO play_players (play_id, user_id, won, score) VALUES (?, ?, ?, ?)').run(playId, p.id, p.won, p.score);
+    db.prepare('INSERT INTO play_players (play_id, user_id, person_id, won, score) VALUES (?, ?, ?, ?, ?)').run(playId, p.id, p.personId ?? 0, p.won, p.score);
   }
   for (const xid of expansionIds || []) {
     db.prepare('INSERT INTO play_expansions (play_id, game_id) VALUES (?, ?)').run(playId, xid);
@@ -814,6 +916,55 @@ function expansionIdsValid(ids, baseGameId, crewId, preAttached = new Set()) {
   return onShelf.length === needShelf.length;
 }
 
+// players wire shape: [{ id: householdUserId, personId?, won?, score? }] —
+// bare numbers also accepted (legacy live-start). personId>0 tags a person from
+// that household; absent/0 means the whole household. A household may appear
+// several times with different personIds, but never both bare AND tagged
+// ("mixed grain" would make it count twice in household stats).
+function parsePlayerEntries(raw) {
+  const seen = new Map(); // `${id}:${personId}` → entry, last write wins (matches the old Map dedupe)
+  const grains = new Map(); // household id → Set of personIds
+  for (const p of Array.isArray(raw) ? raw : []) {
+    let id;
+    let personId = 0;
+    let won = 0;
+    let score = null;
+    if (typeof p === 'number' || typeof p === 'string') {
+      id = Number(p);
+    } else if (p && typeof p === 'object') {
+      id = Number(p.id);
+      personId = intOrNull(p.personId, 1, 99999999) ?? 0;
+      won = p.won ? 1 : 0;
+      score = scoreOrNull(p.score);
+    } else {
+      continue; // [null, "x"] shouldn't 500
+    }
+    if (!Number.isInteger(id)) continue;
+    seen.set(`${id}:${personId}`, { id, personId, won, score });
+    if (!grains.has(id)) grains.set(id, new Set());
+    grains.get(id).add(personId);
+  }
+  for (const pids of grains.values()) {
+    if (pids.has(0) && pids.size > 1) {
+      return { error: 'Tag the people who played or the whole household — not both' };
+    }
+  }
+  return { entries: [...seen.values()] };
+}
+
+// every tagged person must belong to the household they're paired with. Pairs
+// already on the record (preAttached) skip the lookup so departed households'
+// historical tags survive edits — same idea as the expansions' escape hatch.
+// Retired people pass on purpose: retro-tagging someone who moved out is real.
+function personsValid(entries, preAttached = new Set()) {
+  const need = entries.filter((e) => e.personId > 0 && !preAttached.has(`${e.id}:${e.personId}`));
+  if (!need.length) return true;
+  const ids = [...new Set(need.map((e) => e.personId))];
+  const ph = ids.map(() => '?').join(',');
+  const homeOf = new Map(db.prepare(`SELECT id, household_id FROM people WHERE id IN (${ph})`).all(...ids).map((r) => [r.id, r.household_id]));
+  return need.every((e) => homeOf.get(e.personId) === e.id);
+}
+
 // the one rule for attaching anything to a game night: same crew, not called off
 function eventAttachError(eventId, crewId) {
   const ev = db.prepare('SELECT * FROM events WHERE id = ? AND crew_id = ?').get(eventId, crewId);
@@ -840,15 +991,23 @@ function playsFor(crewId, limit = 100, playId = null) {
   const ids = rows.map((r) => r.play_id);
   const players = db
     .prepare(
-      `SELECT pp.play_id, pp.won, pp.score, u.id, u.display_name FROM play_players pp
+      `SELECT pp.play_id, pp.won, pp.score, pp.person_id, pe.name AS person_name, u.id, u.display_name
+       FROM play_players pp
        JOIN users u ON u.id = pp.user_id
-       WHERE pp.play_id IN (${ids.map(() => '?').join(',')}) ORDER BY u.display_name`
+       LEFT JOIN people pe ON pe.id = pp.person_id
+       WHERE pp.play_id IN (${ids.map(() => '?').join(',')}) ORDER BY u.display_name, pe.name`
     )
     .all(...ids);
   const byPlay = new Map();
   for (const p of players) {
     if (!byPlay.has(p.play_id)) byPlay.set(p.play_id, []);
-    byPlay.get(p.play_id).push({ id: p.id, displayName: p.display_name, won: !!p.won, score: p.score });
+    byPlay.get(p.play_id).push({
+      id: p.id,
+      displayName: p.display_name,
+      won: !!p.won,
+      score: p.score,
+      person: p.person_id ? { id: p.person_id, name: p.person_name } : null,
+    });
   }
   const exps = db
     .prepare(
@@ -886,15 +1045,15 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
     .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
     .all(crew.id)
     .map((r) => r.user_id);
-  const seen = new Map();
-  for (const p of Array.isArray(req.body.players) ? req.body.players : []) {
-    if (!p || typeof p !== 'object') continue; // [null, "x"] shouldn't 500
-    const id = Number(p.id);
-    if (Number.isInteger(id)) seen.set(id, { won: p.won ? 1 : 0, score: scoreOrNull(p.score) });
+  const parsed = parsePlayerEntries(req.body.players);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const entries = parsed.entries;
+  if (!entries.length) return res.status(400).json({ error: 'Pick who played' });
+  for (const e of entries) {
+    if (!memberIds.includes(e.id)) return res.status(400).json({ error: 'All players must be members of this crew' });
   }
-  if (!seen.size) return res.status(400).json({ error: 'Pick who played' });
-  for (const id of seen.keys()) {
-    if (!memberIds.includes(id)) return res.status(400).json({ error: 'All players must be members of this crew' });
+  if (!personsValid(entries)) {
+    return res.status(400).json({ error: "That person isn't part of that household" });
   }
   const hostId = intOrNull(req.body.hostId, 1, 99999999);
   if (hostId != null && !memberIds.includes(hostId)) {
@@ -909,9 +1068,10 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
   if (coopResult !== null && game.score_dir !== 'coop') {
     return res.status(400).json({ error: 'Mark this game as co-op first (scoring on the game card)' });
   }
-  // the team wins or loses together — coop_result owns the won flags
+  // the team wins or loses together — coop_result owns the won flags (every
+  // row, person rows included)
   if (coopResult !== null) {
-    for (const v of seen.values()) v.won = coopResult === 'win' ? 1 : 0;
+    for (const e of entries) e.won = coopResult === 'win' ? 1 : 0;
   }
 
   const durationMin = intOrNull(req.body.durationMin, 1, 1440);
@@ -934,7 +1094,7 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
   let playedAt = dateOrNull(req.body.playedAt) || today;
   if (playedAt > today) playedAt = today; // future-dated mistaps clamp to today
   const notes = String(req.body.notes || '').slice(0, 300);
-  const players = [...seen].map(([id, v]) => ({ id, won: v.won, score: v.score }));
+  const players = entries;
 
   let playId;
   db.transaction(() => {
@@ -1031,23 +1191,22 @@ app.patch('/api/crews/:id/plays/:playId', requireAuth, (req, res) => {
   if (req.body.players !== undefined) {
     // players already on this play stay valid even after leaving the crew —
     // an edit must never erase historical participation (same idea as the
-    // expansions' preAttached escape hatch below)
-    const prevPlayerIds = new Set(
-      db.prepare('SELECT user_id FROM play_players WHERE play_id = ?').all(play.id).map((r) => r.user_id)
-    );
-    const seen = new Map();
-    for (const p of Array.isArray(req.body.players) ? req.body.players : []) {
-      if (!p || typeof p !== 'object') continue; // [null, "x"] shouldn't 500
-      const id = Number(p.id);
-      if (Number.isInteger(id)) seen.set(id, { won: p.won ? 1 : 0, score: scoreOrNull(p.score) });
-    }
-    if (!seen.size) return res.status(400).json({ error: 'Pick who played' });
-    for (const id of seen.keys()) {
-      if (!memberIds.includes(id) && !prevPlayerIds.has(id)) {
+    // expansions' preAttached escape hatch below). Pairs cover persons too.
+    const prevRows = db.prepare('SELECT user_id, person_id FROM play_players WHERE play_id = ?').all(play.id);
+    const prevPlayerIds = new Set(prevRows.map((r) => r.user_id));
+    const prevPairs = new Set(prevRows.map((r) => `${r.user_id}:${r.person_id}`));
+    const parsed = parsePlayerEntries(req.body.players);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    if (!parsed.entries.length) return res.status(400).json({ error: 'Pick who played' });
+    for (const e of parsed.entries) {
+      if (!memberIds.includes(e.id) && !prevPlayerIds.has(e.id)) {
         return res.status(400).json({ error: 'All players must be members of this crew' });
       }
     }
-    players = [...seen].map(([id, v]) => ({ id, won: v.won, score: v.score }));
+    if (!personsValid(parsed.entries, prevPairs)) {
+      return res.status(400).json({ error: "That person isn't part of that household" });
+    }
+    players = parsed.entries;
   }
 
   let expansionIds = null;
@@ -1070,7 +1229,7 @@ app.patch('/api/crews/:id/plays/:playId', requireAuth, (req, res) => {
     if (players) {
       db.prepare('DELETE FROM play_players WHERE play_id = ?').run(play.id);
       for (const p of players) {
-        db.prepare('INSERT INTO play_players (play_id, user_id, won, score) VALUES (?, ?, ?, ?)').run(play.id, p.id, p.won, p.score);
+        db.prepare('INSERT INTO play_players (play_id, user_id, person_id, won, score) VALUES (?, ?, ?, ?, ?)').run(play.id, p.id, p.personId ?? 0, p.won, p.score);
       }
     }
     // invariant: coop_result='win' ⟹ whole roster won=1; 'loss' ⟹ all 0.
@@ -1140,8 +1299,11 @@ function livePlaysFor(crewId, onlyId = null) {
   const ph = ids.map(() => '?').join(',');
   const players = db
     .prepare(
-      `SELECT lpp.live_play_id, lpp.score, u.id, u.display_name FROM live_play_players lpp
-       JOIN users u ON u.id = lpp.user_id WHERE lpp.live_play_id IN (${ph}) ORDER BY u.display_name`
+      `SELECT lpp.live_play_id, lpp.score, lpp.person_id, pe.name AS person_name, u.id, u.display_name
+       FROM live_play_players lpp
+       JOIN users u ON u.id = lpp.user_id
+       LEFT JOIN people pe ON pe.id = lpp.person_id
+       WHERE lpp.live_play_id IN (${ph}) ORDER BY u.display_name, pe.name`
     )
     .all(...ids);
   const exps = db
@@ -1153,7 +1315,12 @@ function livePlaysFor(crewId, onlyId = null) {
   const pBy = new Map();
   for (const p of players) {
     if (!pBy.has(p.live_play_id)) pBy.set(p.live_play_id, []);
-    pBy.get(p.live_play_id).push({ id: p.id, displayName: p.display_name, score: p.score });
+    pBy.get(p.live_play_id).push({
+      id: p.id,
+      displayName: p.display_name,
+      score: p.score,
+      person: p.person_id ? { id: p.person_id, name: p.person_name } : null,
+    });
   }
   const eBy = new Map();
   for (const x of exps) {
@@ -1207,12 +1374,16 @@ app.post('/api/crews/:id/live-plays', requireAuth, (req, res) => {
     .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
     .all(crew.id)
     .map((r) => r.user_id);
-  const playerIds = Array.isArray(req.body.players)
-    ? [...new Set(req.body.players.map(Number).filter(Number.isInteger))]
-    : [];
-  if (!playerIds.length) return res.status(400).json({ error: 'Pick who played' });
-  if (playerIds.some((id) => !memberIds.includes(id))) {
+  // accepts bare ids (legacy/household) and {id, personId} objects alike
+  const parsed = parsePlayerEntries(req.body.players);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const entries = parsed.entries;
+  if (!entries.length) return res.status(400).json({ error: 'Pick who played' });
+  if (entries.some((e) => !memberIds.includes(e.id))) {
     return res.status(400).json({ error: 'All players must be members of this crew' });
+  }
+  if (!personsValid(entries)) {
+    return res.status(400).json({ error: "That person isn't part of that household" });
   }
   const hostId = intOrNull(req.body.hostId, 1, 99999999);
   if (hostId != null && !memberIds.includes(hostId)) {
@@ -1244,8 +1415,8 @@ app.post('/api/crews/:id/live-plays', requireAuth, (req, res) => {
     liveId = db
       .prepare('INSERT INTO live_plays (crew_id, game_id, event_id, host_user_id, started_by) VALUES (?, ?, ?, ?, ?)')
       .run(crew.id, game.id, eventId, hostId, req.user.id).lastInsertRowid;
-    for (const uid of playerIds) {
-      db.prepare('INSERT INTO live_play_players (live_play_id, user_id) VALUES (?, ?)').run(liveId, uid);
+    for (const e of entries) {
+      db.prepare('INSERT INTO live_play_players (live_play_id, user_id, person_id) VALUES (?, ?, ?)').run(liveId, e.id, e.personId ?? 0);
     }
     for (const xid of expansionIds) {
       db.prepare('INSERT INTO live_play_expansions (live_play_id, game_id) VALUES (?, ?)').run(liveId, xid);
@@ -1262,28 +1433,59 @@ app.get('/api/live-plays/:id', requireAuth, (req, res) => {
 
 // score upsert doubles as add-player-mid-game (score null). Absolute values,
 // last-write-wins — losing one stepper tap when two phones race is harmless.
+// NOTE: the 3-column conflict target matches the rebuilt PK and ships
+// atomically with the person_id migration — the old 2-column form throws.
 app.put('/api/live-plays/:id/players/:userId', requireAuth, (req, res) => {
   const lp = livePlayOfMine(req, res);
   if (!lp) return;
   const userId = intOrNull(req.params.userId, 1, 99999999);
   const isMember = userId && db.prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?').get(lp.crew_id, userId);
   if (!isMember) return res.status(400).json({ error: 'All players must be members of this crew' });
-  db.prepare(
-    `INSERT INTO live_play_players (live_play_id, user_id, score) VALUES (?, ?, ?)
-     ON CONFLICT(live_play_id, user_id) DO UPDATE SET score = excluded.score`
-  ).run(lp.id, userId, scoreOrNull(req.body.score));
+  const personId = intOrNull(req.body.personId, 1, 99999999) ?? 0;
+  if (personId > 0) {
+    const person = db.prepare('SELECT household_id FROM people WHERE id = ?').get(personId);
+    if (!person || person.household_id !== userId) {
+      return res.status(400).json({ error: "That person isn't part of that household" });
+    }
+  } else {
+    // one household, one grain: a bare household row can't join person rows
+    const hasPersons = db
+      .prepare('SELECT 1 FROM live_play_players WHERE live_play_id = ? AND user_id = ? AND person_id > 0 LIMIT 1')
+      .get(lp.id, userId);
+    if (hasPersons) {
+      return res.status(400).json({ error: 'This household is scored by person — score the people instead' });
+    }
+  }
+  db.transaction(() => {
+    let score = scoreOrNull(req.body.score);
+    if (personId > 0) {
+      // tagging a person upgrades the household away from its bare row; a
+      // score already typed against the household carries to the person so
+      // a second phone's upgrade tap can't silently wipe the first phone's entry
+      const bare = db
+        .prepare('SELECT score FROM live_play_players WHERE live_play_id = ? AND user_id = ? AND person_id = 0')
+        .get(lp.id, userId);
+      if (bare && score == null) score = bare.score;
+      db.prepare('DELETE FROM live_play_players WHERE live_play_id = ? AND user_id = ? AND person_id = 0').run(lp.id, userId);
+    }
+    db.prepare(
+      `INSERT INTO live_play_players (live_play_id, user_id, person_id, score) VALUES (?, ?, ?, ?)
+       ON CONFLICT(live_play_id, user_id, person_id) DO UPDATE SET score = excluded.score`
+    ).run(lp.id, userId, personId, score);
+  })();
   res.json({ livePlay: livePlaysFor(lp.crew_id, lp.id)[0] });
 });
 
 app.delete('/api/live-plays/:id/players/:userId', requireAuth, (req, res) => {
   const lp = livePlayOfMine(req, res);
   if (!lp) return;
+  const personId = intOrNull(req.query.personId, 1, 99999999) ?? 0;
   const count = db.prepare('SELECT COUNT(*) AS n FROM live_play_players WHERE live_play_id = ?').get(lp.id).n;
   const playing = db
-    .prepare('SELECT 1 FROM live_play_players WHERE live_play_id = ? AND user_id = ?')
-    .get(lp.id, req.params.userId);
+    .prepare('SELECT 1 FROM live_play_players WHERE live_play_id = ? AND user_id = ? AND person_id = ?')
+    .get(lp.id, req.params.userId, personId);
   if (playing && count <= 1) return res.status(400).json({ error: 'A live session needs at least one player' });
-  db.prepare('DELETE FROM live_play_players WHERE live_play_id = ? AND user_id = ?').run(lp.id, req.params.userId);
+  db.prepare('DELETE FROM live_play_players WHERE live_play_id = ? AND user_id = ? AND person_id = ?').run(lp.id, req.params.userId, personId);
   res.json({ livePlay: livePlaysFor(lp.crew_id, lp.id)[0] });
 });
 
@@ -1295,9 +1497,10 @@ app.post('/api/live-plays/:id/finish', requireAuth, (req, res) => {
   if (!lp) return;
   const game = db.prepare('SELECT * FROM games WHERE id = ?').get(lp.game_id);
   const sessionPlayers = db
-    .prepare('SELECT user_id, score FROM live_play_players WHERE live_play_id = ?')
+    .prepare('SELECT user_id, person_id, score FROM live_play_players WHERE live_play_id = ?')
     .all(lp.id);
-  const playerIds = new Set(sessionPlayers.map((p) => p.user_id));
+  const pairKey = (u, p) => `${u}:${p}`;
+  const sessionPairs = new Set(sessionPlayers.map((p) => pairKey(p.user_id, p.person_id)));
 
   // co-op result (validated like POST /plays; forces the team outcome)
   const coopResult = req.body.coopResult == null ? null : req.body.coopResult;
@@ -1308,17 +1511,29 @@ app.post('/api/live-plays/:id/finish', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Mark this game as co-op first (scoring on the game card)' });
   }
 
-  // winners: explicit list when present (what the confirm screen shows is what
-  // saves); otherwise derived from scores + score_dir (ties crown everyone)
-  let winnerSet;
-  if (req.body.winnerIds !== undefined) {
+  // winners: explicit pair list when present (what the confirm screen shows is
+  // what saves); legacy winnerIds (household ids) expand to every session row
+  // of that household; otherwise derived from scores + score_dir per row
+  // (ties crown everyone — siblings included)
+  let winnerSet; // pair keys
+  if (req.body.winners !== undefined) {
+    if (!Array.isArray(req.body.winners)) return res.status(400).json({ error: 'Winners must be a list' });
+    const parsed = parsePlayerEntries(req.body.winners);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const pairs = parsed.entries.map((e) => pairKey(e.id, e.personId ?? 0));
+    if (pairs.some((k) => !sessionPairs.has(k))) {
+      return res.status(400).json({ error: 'Winners must be players in this session' });
+    }
+    winnerSet = new Set(pairs);
+  } else if (req.body.winnerIds !== undefined) {
     const ids = Array.isArray(req.body.winnerIds)
       ? [...new Set(req.body.winnerIds.map(Number).filter(Number.isInteger))]
       : null;
-    if (!ids || ids.some((id) => !playerIds.has(id))) {
+    if (!ids || ids.some((id) => !sessionPlayers.some((p) => p.user_id === id))) {
       return res.status(400).json({ error: 'Winners must be players in this session' });
     }
-    winnerSet = new Set(ids);
+    const idSet = new Set(ids);
+    winnerSet = new Set(sessionPlayers.filter((p) => idSet.has(p.user_id)).map((p) => pairKey(p.user_id, p.person_id)));
   } else {
     winnerSet = new Set();
     const scored = sessionPlayers.filter((p) => p.score != null);
@@ -1326,11 +1541,11 @@ app.post('/api/live-plays/:id/finish', requireAuth, (req, res) => {
       const best = game.score_dir === 'low'
         ? Math.min(...scored.map((p) => p.score))
         : Math.max(...scored.map((p) => p.score));
-      for (const p of scored) if (p.score === best) winnerSet.add(p.user_id);
+      for (const p of scored) if (p.score === best) winnerSet.add(pairKey(p.user_id, p.person_id));
     }
   }
   if (coopResult !== null) {
-    winnerSet = coopResult === 'win' ? new Set(playerIds) : new Set();
+    winnerSet = coopResult === 'win' ? new Set(sessionPairs) : new Set();
   }
 
   const notes = String(req.body.notes || '').slice(0, 300);
@@ -1341,7 +1556,12 @@ app.post('/api/live-plays/:id/finish', requireAuth, (req, res) => {
     .prepare("SELECT CAST(ROUND((julianday('now') - julianday(started_at)) * 1440) AS INTEGER) AS m FROM live_plays WHERE id = ?")
     .get(lp.id).m;
   const durationMin = Math.max(1, Math.min(1440, mins));
-  const players = sessionPlayers.map((p) => ({ id: p.user_id, won: winnerSet.has(p.user_id) ? 1 : 0, score: p.score }));
+  const players = sessionPlayers.map((p) => ({
+    id: p.user_id,
+    personId: p.person_id,
+    won: winnerSet.has(pairKey(p.user_id, p.person_id)) ? 1 : 0,
+    score: p.score,
+  }));
   const expansionIds = db
     .prepare('SELECT game_id FROM live_play_expansions WHERE live_play_id = ?')
     .all(lp.id)
@@ -1396,10 +1616,13 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
   if (!crew) return;
   // tie-break key used wherever "most recent" decides: lexicographic max of
   // 'YYYY-MM-DD|0000000id' — latest date first, insertion order within a day
+  // household grain reads go through play_household_results (one row per
+  // (play, household), won = MAX over its identities) so two tagged siblings
+  // in one play never double-count their family
   const totals = db
     .prepare(
       `SELECT u.id, u.display_name, COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins
-       FROM play_players pp
+       FROM play_household_results pp
        JOIN plays p ON p.id = pp.play_id
        JOIN users u ON u.id = pp.user_id
        WHERE p.crew_id = ? GROUP BY u.id`
@@ -1413,7 +1636,7 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
       `WITH win_counts AS (
          SELECT p.game_id, pp.user_id, COUNT(*) AS wins,
                 MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_win
-         FROM plays p JOIN play_players pp ON pp.play_id = p.id
+         FROM plays p JOIN play_household_results pp ON pp.play_id = p.id
          JOIN crew_members cm ON cm.crew_id = p.crew_id AND cm.user_id = pp.user_id
          WHERE p.crew_id = ? AND pp.won = 1
          GROUP BY p.game_id, pp.user_id
@@ -1434,8 +1657,8 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
          SELECT loser.user_id AS loser_id, winner.user_id AS winner_id, COUNT(*) AS losses,
                 MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_loss
          FROM plays p
-         JOIN play_players loser ON loser.play_id = p.id AND loser.won = 0
-         JOIN play_players winner ON winner.play_id = p.id AND winner.won = 1
+         JOIN play_household_results loser ON loser.play_id = p.id AND loser.won = 0
+         JOIN play_household_results winner ON winner.play_id = p.id AND winner.won = 1
          JOIN crew_members cmw ON cmw.crew_id = p.crew_id AND cmw.user_id = winner.user_id
          WHERE p.crew_id = ?
          GROUP BY loser.user_id, winner.user_id
@@ -1455,7 +1678,7 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
       `SELECT user_id, COUNT(*) AS h FROM (
          SELECT pp.user_id AS user_id, COUNT(*) AS n,
                 ROW_NUMBER() OVER (PARTITION BY pp.user_id ORDER BY COUNT(*) DESC) AS rnk
-         FROM plays p JOIN play_players pp ON pp.play_id = p.id
+         FROM plays p JOIN play_household_results pp ON pp.play_id = p.id
          WHERE p.crew_id = ?
          GROUP BY pp.user_id, p.game_id
        ) t WHERE t.n >= t.rnk GROUP BY user_id`
@@ -1561,11 +1784,12 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
   const scoredRows = db
     .prepare(
       `SELECT p.game_id, g.title, g.image_url AS imageUrl, g.score_dir,
-              pp.score, u.display_name AS name, p.played_at
+              pp.score, COALESCE(pe.name || ' (' || u.display_name || ')', u.display_name) AS name, p.played_at
        FROM play_players pp
        JOIN plays p ON p.id = pp.play_id
        JOIN users u ON u.id = pp.user_id
        JOIN games g ON g.id = p.game_id
+       LEFT JOIN people pe ON pe.id = pp.person_id
        WHERE p.crew_id = ? AND pp.score IS NOT NULL
        ORDER BY p.played_at DESC, p.id DESC`
     )
@@ -1585,7 +1809,120 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
     return { gameId: g.gameId, title: g.title, imageUrl: g.imageUrl, scoreDir: g.scoreDir, best: { score: best, displayName: holder.name, playedAt: holder.played_at }, avg, scoredPlays: vals.length };
   });
 
-  res.json({ standings, topGames, milestones, records, totalPlays: tot.n, distinctGames: tot.games, hIndex: crewH, heatmap });
+  // ---- Players grain: person_id>0 rows only. Untagged plays are invisible
+  // here (you can't know which person inside a bare household row played) —
+  // the client shows an honest footnote instead.
+  const personTotals = new Map(
+    db.prepare(
+      `SELECT pp.person_id AS pid, COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins
+       FROM play_players pp JOIN plays p ON p.id = pp.play_id
+       WHERE p.crew_id = ? AND pp.person_id > 0 GROUP BY pp.person_id`
+    ).all(crew.id).map((r) => [r.pid, r])
+  );
+  // one rule everywhere: the Players board shows anyone with tagged plays in
+  // this crew — retired or not (their history IS the board) — and nobody
+  // without them (a freshly added roster shouldn't render as 0-0-0 noise).
+  // Champion/nemesis queries follow the same include-retired posture.
+  const roster = db
+    .prepare(
+      `SELECT per.id, per.name, per.household_id AS householdId, u.display_name AS householdName
+       FROM people per
+       JOIN crew_members cm ON cm.user_id = per.household_id AND cm.crew_id = ?
+       JOIN users u ON u.id = per.household_id
+       WHERE EXISTS (
+         SELECT 1 FROM play_players pp JOIN plays p ON p.id = pp.play_id
+         WHERE p.crew_id = ? AND pp.person_id = per.id
+       )
+       ORDER BY u.display_name, per.name COLLATE NOCASE, per.id`
+    )
+    .all(crew.id, crew.id);
+  const personH = new Map(
+    db.prepare(
+      `SELECT person_id, COUNT(*) AS h FROM (
+         SELECT pp.person_id, COUNT(*) AS n,
+                ROW_NUMBER() OVER (PARTITION BY pp.person_id ORDER BY COUNT(*) DESC) AS rnk
+         FROM plays p JOIN play_players pp ON pp.play_id = p.id
+         WHERE p.crew_id = ? AND pp.person_id > 0
+         GROUP BY pp.person_id, p.game_id
+       ) t WHERE t.n >= t.rnk GROUP BY person_id`
+    ).all(crew.id).map((r) => [r.person_id, r.h])
+  );
+  const personNemesis = new Map(
+    db.prepare(
+      `WITH beat AS (
+         SELECT loser.person_id AS loser_id, winner.person_id AS winner_id, COUNT(*) AS losses,
+                MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_loss
+         FROM plays p
+         JOIN play_players loser ON loser.play_id = p.id AND loser.won = 0 AND loser.person_id > 0
+         JOIN play_players winner ON winner.play_id = p.id AND winner.won = 1 AND winner.person_id > 0
+         JOIN people wper ON wper.id = winner.person_id
+         JOIN crew_members cmw ON cmw.crew_id = p.crew_id AND cmw.user_id = wper.household_id
+         WHERE p.crew_id = ?
+         GROUP BY loser.person_id, winner.person_id
+       ), ranked AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY loser_id ORDER BY losses DESC, last_loss DESC, winner_id) AS rn FROM beat
+       )
+       SELECT r.loser_id, r.winner_id AS personId, per.name, per.household_id AS householdId, r.losses
+       FROM ranked r JOIN people per ON per.id = r.winner_id WHERE r.rn = 1`
+    ).all(crew.id).map((r) => [r.loser_id, { personId: r.personId, name: r.name, householdId: r.householdId, losses: r.losses }])
+  );
+  const playerChampBy = new Map(
+    db.prepare(
+      `WITH win_counts AS (
+         SELECT p.game_id, pp.person_id, COUNT(*) AS wins,
+                MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_win
+         FROM plays p
+         JOIN play_players pp ON pp.play_id = p.id AND pp.person_id > 0 AND pp.won = 1
+         JOIN people per ON per.id = pp.person_id
+         JOIN crew_members cm ON cm.crew_id = p.crew_id AND cm.user_id = per.household_id
+         WHERE p.crew_id = ?
+         GROUP BY p.game_id, pp.person_id
+       ), ranked AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY wins DESC, last_win DESC, person_id) AS rn FROM win_counts
+       )
+       SELECT r.game_id, r.person_id AS personId, per.name, per.household_id AS householdId, u.display_name AS householdName, r.wins
+       FROM ranked r JOIN people per ON per.id = r.person_id JOIN users u ON u.id = per.household_id WHERE r.rn = 1`
+    ).all(crew.id).map((r) => [r.game_id, { personId: r.personId, name: r.name, householdId: r.householdId, householdName: r.householdName, wins: r.wins }])
+  );
+  const playerStandings = roster
+    .map((per) => {
+      const t = personTotals.get(per.id);
+      const plays = t?.plays || 0;
+      const wins = t?.wins || 0;
+      return {
+        personId: per.id,
+        name: per.name,
+        householdId: per.householdId,
+        householdName: per.householdName,
+        plays,
+        wins,
+        winRate: plays ? Math.round((wins / plays) * 100) : 0,
+        hIndex: personH.get(per.id) || 0,
+        nemesis: personNemesis.get(per.id) || null,
+      };
+    })
+    .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.plays - a.plays || a.name.localeCompare(b.name));
+  // untagged is counted in APPEARANCES (bare household rows), not whole plays —
+  // a play where one family tagged people and another didn't still has an
+  // untagged appearance the Players board can't show
+  const untaggedAppearances = db
+    .prepare('SELECT COUNT(*) AS n FROM play_players pp JOIN plays p ON p.id = pp.play_id WHERE p.crew_id = ? AND pp.person_id = 0')
+    .get(crew.id).n;
+  for (const g of topGames) g.playerChampion = playerChampBy.get(g.id) || null;
+  for (const m of milestones) m.playerChampion = playerChampBy.get(m.gameId) || null;
+
+  res.json({
+    standings,
+    topGames,
+    milestones,
+    records,
+    totalPlays: tot.n,
+    distinctGames: tot.games,
+    hIndex: crewH,
+    heatmap,
+    playerStandings,
+    untaggedPlays: untaggedAppearances,
+  });
 });
 
 // per-game crew stats for the detail modal — crew-scoped so play data never
@@ -1602,7 +1939,7 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
   const record = db
     .prepare(
       `SELECT u.id, u.display_name AS displayName, COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins
-       FROM play_players pp JOIN plays p ON p.id = pp.play_id JOIN users u ON u.id = pp.user_id
+       FROM play_household_results pp JOIN plays p ON p.id = pp.play_id JOIN users u ON u.id = pp.user_id
        WHERE p.crew_id = ? AND p.game_id = ?
        GROUP BY u.id ORDER BY wins DESC, plays DESC, u.display_name`
     )
@@ -1611,7 +1948,7 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
     .prepare(
       `SELECT pp.user_id AS id, u.display_name AS displayName, COUNT(*) AS wins,
               MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_win
-       FROM plays p JOIN play_players pp ON pp.play_id = p.id JOIN users u ON u.id = pp.user_id
+       FROM plays p JOIN play_household_results pp ON pp.play_id = p.id JOIN users u ON u.id = pp.user_id
        JOIN crew_members cm ON cm.crew_id = p.crew_id AND cm.user_id = pp.user_id
        WHERE p.crew_id = ? AND p.game_id = ? AND pp.won = 1
        GROUP BY pp.user_id ORDER BY wins DESC, last_win DESC, pp.user_id LIMIT 1`
@@ -1621,8 +1958,9 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
   const ord = game.score_dir === 'low' ? 'ASC' : 'DESC';
   const bestRow = db
     .prepare(
-      `SELECT pp.score, u.display_name AS displayName, p.played_at
+      `SELECT pp.score, COALESCE(pe.name || ' (' || u.display_name || ')', u.display_name) AS displayName, p.played_at
        FROM play_players pp JOIN plays p ON p.id = pp.play_id JOIN users u ON u.id = pp.user_id
+       LEFT JOIN people pe ON pe.id = pp.person_id
        WHERE p.crew_id = ? AND p.game_id = ? AND pp.score IS NOT NULL
        ORDER BY pp.score ${ord}, p.played_at DESC LIMIT 1`
     )
@@ -1662,6 +2000,33 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
     )
     .all(crew.id, game.id);
 
+  // person grain for the detail card: per-player record + top player
+  const playerRecord = db
+    .prepare(
+      `SELECT pp.person_id AS personId, per.name, per.household_id AS householdId, u.display_name AS householdName,
+              COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins
+       FROM play_players pp
+       JOIN plays p ON p.id = pp.play_id
+       JOIN people per ON per.id = pp.person_id
+       JOIN users u ON u.id = per.household_id
+       WHERE p.crew_id = ? AND p.game_id = ? AND pp.person_id > 0
+       GROUP BY pp.person_id ORDER BY wins DESC, plays DESC, per.name COLLATE NOCASE`
+    )
+    .all(crew.id, game.id);
+  const playerChampion = db
+    .prepare(
+      `SELECT pp.person_id AS personId, per.name, per.household_id AS householdId, u.display_name AS householdName,
+              COUNT(*) AS wins, MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_win
+       FROM plays p
+       JOIN play_players pp ON pp.play_id = p.id AND pp.person_id > 0 AND pp.won = 1
+       JOIN people per ON per.id = pp.person_id
+       JOIN users u ON u.id = per.household_id
+       JOIN crew_members cm ON cm.crew_id = p.crew_id AND cm.user_id = per.household_id
+       WHERE p.crew_id = ? AND p.game_id = ?
+       GROUP BY pp.person_id ORDER BY wins DESC, last_win DESC, pp.person_id LIMIT 1`
+    )
+    .get(crew.id, game.id);
+
   res.json({
     stats: {
       plays: summary.plays,
@@ -1674,6 +2039,10 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
       durationPlays: durs.length,
       coop: coop ? { wins: coop.wins || 0, losses: coop.losses || 0 } : null,
       expansionUsage,
+      playerRecord,
+      playerChampion: playerChampion
+        ? { personId: playerChampion.personId, name: playerChampion.name, householdId: playerChampion.householdId, householdName: playerChampion.householdName, wins: playerChampion.wins }
+        : null,
     },
   });
 });
@@ -1743,7 +2112,7 @@ function eventsFor(crewId, userId, onlyEventId = null) {
       `SELECT p.event_id, p.id, p.game_id, p.played_at, g.title, g.image_url,
               wu.display_name AS winner_name
        FROM plays p JOIN games g ON g.id = p.game_id
-       LEFT JOIN play_players w ON w.play_id = p.id AND w.won = 1
+       LEFT JOIN play_household_results w ON w.play_id = p.id AND w.won = 1
        LEFT JOIN users wu ON wu.id = w.user_id
        WHERE p.event_id IN (${ph}) ORDER BY p.played_at, p.id, wu.display_name`
     )

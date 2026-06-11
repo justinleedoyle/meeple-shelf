@@ -354,9 +354,16 @@ async function route() {
 async function openAccountModal() {
   let reqs = { incoming: [], outgoing: [] };
   let mates = [];
+  let household = [];
   try {
-    [reqs, { crewmates: mates }] = await Promise.all([api('/borrow-requests'), api('/crewmates')]);
+    let peopleRes;
+    [reqs, { crewmates: mates }, peopleRes] = await Promise.all([
+      api('/borrow-requests'),
+      api('/crewmates'),
+      api('/me/people').catch(() => ({ people: [] })),
+    ]);
     mates = mates.filter((m) => !m.isMe);
+    household = peopleRes.people;
   } catch { /* sections render empty */ }
 
   const statusChip = (s) =>
@@ -380,6 +387,32 @@ async function openAccountModal() {
     <div class="modal-head"><h2>Account</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div style="color:var(--muted);font-size:14px">Signed in as <strong style="color:var(--text)">${esc(state.user.displayName)}</strong> (@${esc(state.user.username)})</div>
+
+      <h3 class="acct-h">${icon('users')} My household</h3>
+      <div class="r-meta" style="margin-bottom:8px">Add the humans behind “${esc(state.user.displayName)}” — no logins, just names. Tag them on plays for per-player stats; plays without people still count for the household.</div>
+      <div id="hh-list">
+        ${household.filter((p) => !p.retiredAt).map((p) => `
+        <div class="owner-row" data-pid="${p.id}" style="--c:${memberColor(state.user.id)}">
+          <label class="owner-main">
+            <span class="avatar">${esc(p.name.slice(0, 2).toUpperCase())}</span>
+            <span class="m-name">${esc(p.name)}</span>
+          </label>
+          <span class="r-meta" style="flex:none">${p.taggedPlays} play${p.taggedPlays === 1 ? '' : 's'}</span>
+          <button class="icon-btn" data-hh-rename="${p.id}" title="Rename">${icon('pencil')}</button>
+          ${p.taggedPlays > 0
+            ? `<button class="chip-btn" data-hh-retire="${p.id}">Retire</button>`
+            : `<button class="icon-btn danger" data-hh-remove="${p.id}" title="Remove">${icon('x')}</button>`}
+        </div>`).join('')}
+      </div>
+      ${household.some((p) => p.retiredAt) ? `
+      <div class="owner-pick" style="margin-top:6px">
+        <span class="glabel">Retired</span>
+        ${household.filter((p) => p.retiredAt).map((p) => `<button class="chip-btn hh-retired" data-hh-unretire="${p.id}">${esc(p.name)}</button>`).join('')}
+      </div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="text" id="hh-name" maxlength="20" placeholder="Add a person…" style="flex:1">
+        <button class="btn" id="hh-add">Add</button>
+      </div>
 
       ${reqs.incoming.length ? `
       <h3 class="acct-h">${icon('bell')} Borrow requests</h3>
@@ -408,6 +441,99 @@ async function openAccountModal() {
       <hr style="border:none;border-top:1px solid var(--line);margin:20px 0">
       <button class="btn" id="p-logout">Log out</button>
     </div>`);
+
+  // household people: mutations mark the page dirty so the crew payload (and
+  // the play pickers) refetch on close. A busy flag blocks double submits,
+  // and the refresh re-opens the modal only if the user hasn't dismissed it.
+  let hhBusy = false;
+  const hhRefresh = async (fn) => {
+    if (hhBusy) return;
+    hhBusy = true;
+    const myModal = modalRoot.querySelector('.modal');
+    try {
+      await fn();
+      modalDirty = true;
+      if (document.contains(myModal)) await openAccountModal();
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      hhBusy = false;
+    }
+  };
+  const hhRowHtml = (p) => `
+        <div class="owner-row" data-pid="${p.id}" style="--c:${memberColor(state.user.id)}">
+          <label class="owner-main">
+            <span class="avatar">${esc(p.name.slice(0, 2).toUpperCase())}</span>
+            <span class="m-name">${esc(p.name)}</span>
+          </label>
+          <span class="r-meta" style="flex:none">${p.taggedPlays || 0} play${p.taggedPlays === 1 ? '' : 's'}</span>
+          <button class="icon-btn" data-hh-rename="${p.id}" title="Rename">${icon('pencil')}</button>
+          ${p.taggedPlays > 0
+            ? `<button class="chip-btn" data-hh-retire="${p.id}">Retire</button>`
+            : `<button class="icon-btn danger" data-hh-remove="${p.id}" title="Remove">${icon('x')}</button>`}
+        </div>`;
+  $('#hh-add').onclick = async () => {
+    const name = $('#hh-name').value.trim();
+    if (!name || hhBusy) return;
+    hhBusy = true;
+    try {
+      // in-place insert: a family adding four people in a row shouldn't lose
+      // the keyboard and watch the modal rebuild between every name
+      const { person } = await api('/me/people', { method: 'POST', body: { name } });
+      modalDirty = true;
+      $('#hh-list').insertAdjacentHTML('beforeend', hhRowHtml(person));
+      $('#hh-name').value = '';
+      $('#hh-name').focus();
+      toast(`${person.name} added to the household`);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      hhBusy = false;
+    }
+  };
+  $('#hh-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); $('#hh-add').click(); }
+  });
+  $('#hh-list').addEventListener('click', (e) => {
+    const ren = e.target.closest('[data-hh-rename]');
+    if (ren) {
+      const cur = e.target.closest('[data-pid]').querySelector('.m-name').textContent;
+      const name = window.prompt('Rename to:', cur);
+      if (!name || name.trim() === cur) return;
+      hhRefresh(async () => {
+        await api(`/me/people/${ren.dataset.hhRename}`, { method: 'PATCH', body: { name: name.trim() } });
+        toast('Renamed');
+      });
+      return;
+    }
+    const ret = e.target.closest('[data-hh-retire]');
+    if (ret) {
+      const nm = e.target.closest('[data-pid]').querySelector('.m-name').textContent;
+      if (!window.confirm(`Retire ${nm}? Their tagged plays stay on the record, and you can bring them back anytime.`)) return;
+      hhRefresh(async () => {
+        await api(`/me/people/${ret.dataset.hhRetire}`, { method: 'PATCH', body: { retired: true } });
+        toast(`${nm} retired — their plays stay on the record`);
+      });
+      return;
+    }
+    const rem = e.target.closest('[data-hh-remove]');
+    if (rem) {
+      hhRefresh(async () => {
+        const r = await api(`/me/people/${rem.dataset.hhRemove}`, { method: 'DELETE' });
+        toast(r.retired ? 'They have plays on the record — retired instead' : 'Removed');
+      });
+    }
+  });
+  for (const chip of modalRoot.querySelectorAll('[data-hh-unretire]')) {
+    chip.onclick = () => {
+      const nm = chip.textContent.trim();
+      if (!window.confirm(`Bring ${nm} back? They’ll reappear in the play pickers.`)) return;
+      hhRefresh(async () => {
+        await api(`/me/people/${chip.dataset.hhUnretire}`, { method: 'PATCH', body: { retired: false } });
+        toast(`${nm} is back`);
+      });
+    };
+  }
 
   if ($('#req-in')) {
     $('#req-in').addEventListener('click', async (e) => {
@@ -1127,10 +1253,10 @@ async function viewCrews() {
 
 // filters start open on desktop, tucked away on phones
 const filtersOpenDefault = !window.matchMedia('(max-width: 640px)').matches;
-const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false };
+const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', statsGrain: 'household', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false };
 
 async function viewCrewDetail(id) {
-  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false });
+  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', statsGrain: 'household', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false });
   const [{ crew, members, games }, { livePlays: livePlaysInit }] = await Promise.all([
     api('/crews/' + id),
     api(`/crews/${id}/live-plays`).catch(() => ({ livePlays: [] })),
@@ -1467,15 +1593,41 @@ async function viewCrewDetail(id) {
 
     const medalIcon = (i) => icon('award', ['gold', 'silver', 'bronze'][i]);
     const tierChip = (t) => (t ? `<span class="badge milestone">${icon('award')} ${t === 'quarter' ? '25+' : t === 'dime' ? '10+' : '5+'}</span>` : '');
+    const hasPlayers = (stats.playerStandings || []).length > 0;
+    // both grains ride one payload — the toggle repaints without refetching
+    const paint = () => {
+    const grain = hasPlayers ? crewState.statsGrain : 'household';
     container.innerHTML = `
       <div class="stats-head">
         <div class="stats-blurb">${stats.totalPlays} play${stats.totalPlays === 1 ? '' : 's'} · ${stats.distinctGames || 0} game${stats.distinctGames === 1 ? '' : 's'} · crew H-index <strong>${stats.hIndex || 0}</strong></div>
+        ${hasPlayers ? `<div class="segmented" id="grain-seg">
+          <button data-grain="household" class="${grain === 'household' ? 'active' : ''}">Households</button>
+          <button data-grain="players" class="${grain === 'players' ? 'active' : ''}">Players</button>
+        </div>` : ''}
         <button class="btn btn-primary" id="log-play-btn">${icon('clipboard')} Log a play</button>
       </div>
 
       ${stats.totalPlays === 0 ? emptyState('dice', 'No plays yet', 'Log your first game and the standings begin. Every rivalry starts somewhere.') : `
       <div class="stats-section">
         <h3>Standings</h3>
+        ${grain === 'players' ? `
+        <div class="matrix-wrap"><table class="matrix">
+          <thead><tr><th style="text-align:left">Player</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="H-index">H</th></tr></thead>
+          <tbody>
+            ${stats.playerStandings.map((s, i) => `<tr>
+              <td>
+                <span class="medal">${s.wins > 0 && i < 3 ? medalIcon(i) : ''}</span> <span class="avatar" style="--c:${memberColor(s.householdId)};background:${memberColor(s.householdId)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle" title="${esc(s.householdName)}">${esc(s.householdName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.name)}</span>
+                ${s.nemesis ? `<div class="nemesis-line">${icon('swords')} nemesis: ${esc(s.nemesis.name)} (${s.nemesis.losses})</div>` : ''}
+              </td>
+              <td>${s.plays}</td>
+              <td>${s.wins}</td>
+              <td>${s.plays ? s.winRate + '%' : '—'}</td>
+              <td>${s.hIndex || '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+        ${stats.untaggedPlays > 0 ? `<div class="r-meta" style="margin-top:6px">+ ${stats.untaggedPlays} untagged household play${stats.untaggedPlays === 1 ? '' : 's'} not shown — tag people when logging to count them here.</div>` : ''}
+        ` : `
         <div class="matrix-wrap"><table class="matrix">
           <thead><tr><th style="text-align:left">Household</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="H-index">H</th><th title="Plays hosted">${icon('home')}</th></tr></thead>
           <tbody>
@@ -1492,6 +1644,7 @@ async function viewCrewDetail(id) {
             </tr>`).join('')}
           </tbody>
         </table></div>
+        `}
       </div>
 
       <div class="stats-section">
@@ -1558,7 +1711,7 @@ async function viewCrewDetail(id) {
             <div class="r-grow">
               <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}${p.host ? ` · ${icon('home')} ${esc(p.host.displayName)}` : ''}${p.durationMin ? ` · ${icon('clock')} ${fmtMins(p.durationMin)}` : ''}</span>${p.coopResult ? ` <span class="badge">${p.coopResult === 'win' ? 'team win' : 'game won'}</span>` : ''}</div>
               ${p.expansions?.length ? `<div class="r-meta">+ ${p.expansions.map((x) => esc(expShortTitle(x))).join(', ')}</div>` : ''}
-              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? icon('crown') + ' ' : ''}${esc(pl.displayName)}${pl.score != null ? ` · ${pl.score}` : ''}</span>`).join('')}</div>
+              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}" title="${esc(pl.person ? `${pl.person.name} — ${pl.displayName}` : pl.displayName)}">${pl.won ? icon('crown') + ' ' : ''}${esc(pl.person ? pl.person.name : pl.displayName)}${pl.score != null ? ` · ${pl.score}` : ''}</span>`).join('')}</div>
               ${p.notes ? `<div class="card-notes">${esc(p.notes)}</div>` : ''}
             </div>
             <button class="icon-btn" data-edit-play="${p.id}" title="Edit this play">${icon('pencil')}</button>
@@ -1572,6 +1725,14 @@ async function viewCrewDetail(id) {
     if (hs) hs.scrollLeft = hs.scrollWidth; // most recent weeks first on phones
 
     $('#log-play-btn').onclick = () => openLogPlayModal();
+    if ($('#grain-seg')) {
+      $('#grain-seg').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-grain]');
+        if (!b || crewState.statsGrain === b.dataset.grain) return;
+        crewState.statsGrain = b.dataset.grain;
+        paint(); // fresh elements each paint — listeners can't stack
+      });
+    }
     if ($('#play-feed')) {
       $('#play-feed').addEventListener('click', async (e) => {
         const eb = e.target.closest('[data-edit-play]');
@@ -1588,6 +1749,8 @@ async function viewCrewDetail(id) {
         route(); // full refresh so grid play counts / milestones don't go stale
       });
     }
+    };
+    paint();
   }
 
   // ---- game nights: propose a date, RSVP, vote on what to play ----
@@ -1860,14 +2023,20 @@ async function viewCrewDetail(id) {
         </div>
         <div id="lp-players">
           ${members.map((m) => `
-          <div class="owner-row" style="--c:${memberColor(m.id)}">
-            <label class="owner-main">
-              <input type="checkbox" value="${m.id}">
-              <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
-              <span class="m-name">${esc(m.displayName)}</span>
-            </label>
-            <input type="number" class="lp-score" data-score="${m.id}" step="1" placeholder="pts" aria-label="${esc(m.displayName)} score">
-            <button class="chip-btn lp-won" data-won="${m.id}" disabled>${icon('crown')}<span class="lp-won-txt"> Won</span></button>
+          <div class="owner-block" data-house="${m.id}">
+            <div class="owner-row" style="--c:${memberColor(m.id)}">
+              <label class="owner-main">
+                <input type="checkbox" value="${m.id}">
+                <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
+                <span class="m-name">${esc(m.displayName)}</span>
+              </label>
+              <input type="number" class="lp-score" data-score="${m.id}" step="1" placeholder="pts" aria-label="${esc(m.displayName)} score">
+              <button class="chip-btn lp-won" data-won="${m.id}" disabled>${icon('crown')}<span class="lp-won-txt"> Won</span></button>
+            </div>
+            ${(m.people || []).length ? `<div class="person-pick" data-people-for="${m.id}" hidden>
+              ${m.people.map((p) => `<button type="button" class="chip-btn person-chip" data-person="${p.id}" data-house="${m.id}" style="--c:${memberColor(m.id)}">${esc(p.name)}</button>`).join('')}
+            </div>` : ''}
+            <div class="person-rows" data-person-rows="${m.id}"></div>
           </div>`).join('')}
         </div>
         <label>Notes <span style="font-weight:400">(optional)</span></label>
@@ -1953,16 +2122,60 @@ async function viewCrewDetail(id) {
     renderGameArea();
     syncCoopUi();
 
+    // the single mutation path for person tags: chip active state, the score
+    // row under the household, and the household's has-people mode all move
+    // together (chip clicks, checkbox clears, and edit seeding all call this)
+    function togglePerson(uid, pid, name, { silent = false } = {}) {
+      const rows = modalRoot.querySelector(`.person-rows[data-person-rows="${uid}"]`);
+      const chip = modalRoot.querySelector(`.person-chip[data-house="${uid}"][data-person="${pid}"]`);
+      const existing = rows.querySelector(`.person-row[data-person="${pid}"]`);
+      if (existing) {
+        existing.remove();
+        chip?.classList.remove('active');
+      } else {
+        rows.insertAdjacentHTML(
+          'beforeend',
+          `<div class="owner-row person-row" data-unit="${uid}:${pid}" data-house="${uid}" data-person="${pid}" style="--c:${memberColor(uid)}">
+            <span class="person-band" aria-hidden="true"></span>
+            <span class="m-name">${esc(name)}</span>
+            <input type="number" class="lp-score" data-score="${uid}:${pid}" step="1" placeholder="pts" aria-label="${esc(name)} score">
+            <button class="chip-btn lp-won" data-won="${uid}:${pid}">${icon('crown')}<span class="lp-won-txt"> Won</span></button>
+          </div>`
+        );
+        chip?.classList.add('active');
+      }
+      const houseRow = modalRoot.querySelector(`.owner-block[data-house="${uid}"] > .owner-row`);
+      houseRow.classList.toggle('has-people', rows.children.length > 0);
+      if (!silent) suggestCrowns();
+    }
+
     for (const cb of modalRoot.querySelectorAll('#lp-players input[type="checkbox"]')) {
       cb.onchange = () => {
         const won = modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`);
         won.disabled = !cb.checked;
         if (!cb.checked) won.classList.remove('active');
+        const pick = modalRoot.querySelector(`.person-pick[data-people-for="${cb.value}"]`);
+        if (pick) {
+          pick.hidden = !cb.checked;
+          if (!cb.checked) {
+            // unchecking the household clears its person state entirely
+            pick.querySelectorAll('.person-chip.active').forEach((c) => c.classList.remove('active'));
+            const rows = modalRoot.querySelector(`.person-rows[data-person-rows="${cb.value}"]`);
+            rows.innerHTML = '';
+            modalRoot.querySelector(`.owner-block[data-house="${cb.value}"] > .owner-row`).classList.remove('has-people');
+            suggestCrowns();
+          }
+        }
       };
     }
     // edit mode: never let the auto-crown heuristic rewrite recorded winners
     let crownsTouched = mode === 'edit';
     modalRoot.querySelector('#lp-players').addEventListener('click', (e) => {
+      const pchip = e.target.closest('.person-chip');
+      if (pchip) {
+        togglePerson(Number(pchip.dataset.house), Number(pchip.dataset.person), pchip.textContent.trim());
+        return;
+      }
       const btn = e.target.closest('.lp-won');
       if (!btn || btn.disabled) return;
       crownsTouched = true;
@@ -1975,6 +2188,25 @@ async function viewCrewDetail(id) {
       modalRoot.querySelector('#lp-players').classList.toggle('show-scores');
       $('#lp-scores-toggle').classList.toggle('active');
     };
+    // the things that can score/win on this play: person rows where a household
+    // tagged people, the household row itself otherwise
+    function scoringUnits() {
+      const units = [];
+      for (const cb of modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')) {
+        const personRows = modalRoot.querySelectorAll(`#lp-players .person-row[data-house="${cb.value}"]`);
+        if (personRows.length) {
+          for (const row of personRows) {
+            units.push({ scoreEl: row.querySelector('.lp-score'), wonEl: row.querySelector('.lp-won') });
+          }
+        } else {
+          units.push({
+            scoreEl: modalRoot.querySelector(`.lp-score[data-score="${cb.value}"]`),
+            wonEl: modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`),
+          });
+        }
+      }
+      return units;
+    }
     function suggestCrowns() {
       if (crownsTouched) return;
       const dir = selectedGame?.scoreDir || 'high';
@@ -1983,24 +2215,23 @@ async function viewCrewDetail(id) {
         for (const btn of modalRoot.querySelectorAll('.lp-won')) btn.classList.remove('active');
         return;
       }
-      const rows = [...modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')]
-        .map((cb) => {
-          const v = modalRoot.querySelector(`.lp-score[data-score="${cb.value}"]`).value;
-          return { id: cb.value, score: v === '' ? null : Number(v) };
-        })
-        .filter((r) => r.score != null && Number.isFinite(r.score));
-      if (rows.length < 2) return;
-      const best = dir === 'low' ? Math.min(...rows.map((r) => r.score)) : Math.max(...rows.map((r) => r.score));
-      for (const btn of modalRoot.querySelectorAll('.lp-won')) {
-        const row = rows.find((r) => r.id === btn.dataset.won);
-        if (!btn.disabled || row) btn.classList.toggle('active', !!row && row.score === best);
+      const units = scoringUnits();
+      const scored = units
+        .map((u) => ({ ...u, score: u.scoreEl.value === '' ? null : Number(u.scoreEl.value) }))
+        .filter((u) => u.score != null && Number.isFinite(u.score));
+      if (scored.length < 2) return;
+      const best = dir === 'low' ? Math.min(...scored.map((u) => u.score)) : Math.max(...scored.map((u) => u.score));
+      for (const u of units) {
+        const s = scored.find((x) => x.wonEl === u.wonEl);
+        u.wonEl.classList.toggle('active', !!s && s.score === best);
       }
     }
     modalRoot.querySelector('#lp-players').addEventListener('input', (e) => {
       const inp = e.target.closest('.lp-score');
       if (!inp) return;
+      // person inputs have composite keys and no checkbox — skip the auto-check
       const cb = modalRoot.querySelector(`#lp-players input[type="checkbox"][value="${inp.dataset.score}"]`);
-      if (inp.value !== '' && !cb.checked) {
+      if (cb && inp.value !== '' && !cb.checked) {
         cb.checked = true;
         cb.onchange();
       }
@@ -2040,6 +2271,28 @@ async function viewCrewDetail(id) {
       let anyScore = false;
       for (const pl of editPlay.players) {
         if (!checkPlayer(pl.id)) continue; // departed players have no checkbox — buildBody re-adds them from the record
+        if (pl.person) {
+          // person-tagged row: make sure a chip exists (retired people aren't
+          // in members[].people — inject one from the record so history
+          // round-trips), then materialize the row and restore its state
+          const uid = pl.id;
+          const pid = pl.person.id;
+          if (!modalRoot.querySelector(`.person-chip[data-house="${uid}"][data-person="${pid}"]`)) {
+            const pick = modalRoot.querySelector(`.person-pick[data-people-for="${uid}"]`);
+            const chipHtml = `<button type="button" class="chip-btn person-chip retired" data-person="${pid}" data-house="${uid}" style="--c:var(--faint)">${esc(pl.person.name || 'Former player')}</button>`;
+            if (pick) pick.insertAdjacentHTML('beforeend', chipHtml);
+            else modalRoot.querySelector(`.owner-block[data-house="${uid}"] > .owner-row`)
+              .insertAdjacentHTML('afterend', `<div class="person-pick" data-people-for="${uid}">${chipHtml}</div>`);
+          }
+          togglePerson(uid, pid, pl.person.name || 'Former player', { silent: true });
+          const row = modalRoot.querySelector(`#lp-players .person-row[data-unit="${uid}:${pid}"]`);
+          if (pl.won) row.querySelector('.lp-won').classList.add('active');
+          if (pl.score != null) {
+            row.querySelector('.lp-score').value = pl.score;
+            anyScore = true;
+          }
+          continue;
+        }
         if (pl.won) modalRoot.querySelector(`.lp-won[data-won="${pl.id}"]`)?.classList.add('active');
         if (pl.score != null) {
           modalRoot.querySelector(`.lp-score[data-score="${pl.id}"]`).value = pl.score;
@@ -2056,7 +2309,7 @@ async function viewCrewDetail(id) {
       if (departed.length) {
         modalRoot.querySelector('#lp-players').insertAdjacentHTML(
           'afterend',
-          `<div class="r-meta" style="margin:4px 0 0">Also played: ${departed.map((d) => esc(d.displayName) + (d.won ? ' ' + icon('crown') : '')).join(', ')} — kept on the record</div>`
+          `<div class="r-meta" style="margin:4px 0 0">Also played: ${departed.map((d) => esc(d.person ? `${d.person.name} (${d.displayName})` : d.displayName) + (d.won ? ' ' + icon('crown') : '')).join(', ')} — kept on the record</div>`
         );
       }
       if (editPlay.host && !members.some((m) => m.id === editPlay.host.id)) {
@@ -2078,20 +2331,40 @@ async function viewCrewDetail(id) {
     }
 
     function buildBody() {
-      const players = [...modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')].map((cb) => {
-        const sv = modalRoot.querySelector(`.lp-score[data-score="${cb.value}"]`).value;
-        const n = sv === '' ? null : Number(sv);
-        return {
-          id: Number(cb.value),
-          won: modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`).classList.contains('active'),
-          score: n != null && Number.isFinite(n) ? Math.round(n) : null,
-        };
-      });
+      const players = [];
+      for (const cb of modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')) {
+        const uid = Number(cb.value);
+        const personRows = [...modalRoot.querySelectorAll(`#lp-players .person-row[data-house="${uid}"]`)];
+        if (personRows.length) {
+          // tagged household: one entry per person; the household's own inputs
+          // are hidden and semantically dead
+          for (const row of personRows) {
+            const sv = row.querySelector('.lp-score').value;
+            const n = sv === '' ? null : Number(sv);
+            players.push({
+              id: uid,
+              personId: Number(row.dataset.person),
+              won: row.querySelector('.lp-won').classList.contains('active'),
+              score: n != null && Number.isFinite(n) ? Math.round(n) : null,
+            });
+          }
+        } else {
+          const sv = modalRoot.querySelector(`.lp-score[data-score="${uid}"]`).value;
+          const n = sv === '' ? null : Number(sv);
+          players.push({
+            id: uid,
+            won: modalRoot.querySelector(`.lp-won[data-won="${uid}"]`).classList.contains('active'),
+            score: n != null && Number.isFinite(n) ? Math.round(n) : null,
+          });
+        }
+      }
       // departed members have no checkbox row — carry them from the record so
-      // a full-replace edit can't erase their participation
+      // a full-replace edit can't erase their participation (person tags too)
       if (editPlay) {
         for (const pl of editPlay.players) {
-          if (!members.some((m) => m.id === pl.id)) players.push({ id: pl.id, won: !!pl.won, score: pl.score });
+          if (!members.some((m) => m.id === pl.id)) {
+            players.push({ id: pl.id, personId: pl.person?.id || 0, won: !!pl.won, score: pl.score });
+          }
         }
       }
       const hostChip = modalRoot.querySelector('#lp-host .chip-btn.active');
@@ -2099,11 +2372,13 @@ async function viewCrewDetail(id) {
       const isCoop = selectedGame?.scoreDir === 'coop';
       // coop crowns: chip chosen → server forces the team outcome; no chip →
       // PRESERVE recorded crowns (a play crowned before the game was marked
-      // co-op must survive an unrelated edit untouched)
+      // co-op must survive an unrelated edit untouched). Pair-matched.
       const wonFor = (p) => {
         if (!isCoop) return p.won;
         if (coopChip) return false;
-        return editPlay ? !!editPlay.players.find((x) => x.id === p.id)?.won : false;
+        return editPlay
+          ? !!editPlay.players.find((x) => x.id === p.id && (x.person?.id || 0) === (p.personId || 0))?.won
+          : false;
       };
       const dv = $('#lp-duration').value;
       return {
@@ -2136,7 +2411,12 @@ async function viewCrewDetail(id) {
         else if (body.coopResult === 'loss') toast(`Logged — ${selectedGame.title} wins this round`);
         else {
           const winners = body.players.filter((p) => p.won);
-          toast(winners.length ? `Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => members.find((m) => m.id === w.id)?.displayName).join(', ')}` : `Logged ${selectedGame.title}`);
+          const winName = (w) => {
+            const house = members.find((m) => m.id === w.id);
+            if (w.personId) return house?.people?.find((p) => p.id === w.personId)?.name || house?.displayName || 'someone';
+            return house?.displayName;
+          };
+          toast(winners.length ? `Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map(winName).join(', ')}` : `Logged ${selectedGame.title}`);
         }
         if (milestone) {
           const n = milestone === 'quarter' ? 25 : milestone === 'dime' ? 10 : 5;
@@ -2156,15 +2436,23 @@ async function viewCrewDetail(id) {
       $('#lp-live').onclick = async () => {
         $('#lp-error').textContent = '';
         if (!selectedGame) { $('#lp-error').textContent = 'Pick the game you played'; return; }
-        const checked = [...modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')].map((cb) => Number(cb.value));
-        if (!checked.length) { $('#lp-error').textContent = 'Pick who played'; return; }
+        // same person-aware shape as a logged play: person rows when tagged,
+        // a bare household id otherwise
+        const livePlayers = [];
+        for (const cb of modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')) {
+          const uid = Number(cb.value);
+          const personRows = [...modalRoot.querySelectorAll(`#lp-players .person-row[data-house="${uid}"]`)];
+          if (personRows.length) for (const row of personRows) livePlayers.push({ id: uid, personId: Number(row.dataset.person) });
+          else livePlayers.push(uid);
+        }
+        if (!livePlayers.length) { $('#lp-error').textContent = 'Pick who played'; return; }
         const hostChip = modalRoot.querySelector('#lp-host .chip-btn.active');
         try {
           const { livePlay } = await api(`/crews/${id}/live-plays`, {
             method: 'POST',
             body: {
               gameId: selectedGame.id,
-              players: checked,
+              players: livePlayers,
               hostId: hostChip ? Number(hostChip.dataset.host) : null,
               expansionIds: [...pickedExps],
               ...(prefill?.eventId ? { eventId: prefill.eventId } : {}),
@@ -2254,14 +2542,12 @@ async function viewCrewDetail(id) {
 
   function openLivePlayModal(lp) {
     let current = lp;
-    // dirty-state tracking the poll respects: uids with a debounced send not
-    // yet fired, plus PUTs actually in flight. (A plain counter leaked here
-    // once — trailing debounce coalesces N calls into one execution, so
-    // increments must live INSIDE the debounced fn to pair 1:1 with decrements.)
-    const unsent = new Set();
+    // per-key pending sends with explicit flush/cancel — roster changes and
+    // the finish screen must never race a debounced score (a stale send once
+    // resurrected a removed player into the logged play)
+    const pendingScores = new Map(); // key → { value, timer }
     let inflight = 0;
     let onFinishScreen = false;
-    const debouncers = new Map();
 
     const modalEl = openModal(`
       <div class="modal-head"><h2>${icon('activity', 'accent')} ${esc(lp.game.title)}</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
@@ -2276,25 +2562,47 @@ async function viewCrewDetail(id) {
       `started ${timeAgo(current.startedAt)}`,
     ].filter(Boolean).join(' · ');
 
-    function sendScore(uid, value) {
-      if (!debouncers.has(uid)) {
-        debouncers.set(uid, debounce(async (v) => {
-          unsent.delete(uid);
-          inflight++;
-          try {
-            const { livePlay } = await api(`/live-plays/${current.id}/players/${uid}`, { method: 'PUT', body: { score: v } });
-            current = livePlay; // quiet refresh; no re-render mid-typing
-          } catch (err) {
-            if (err.status === 404) endedElsewhere();
-            else toast(err.message);
-          } finally {
-            inflight--;
-          }
-        }, 500));
+    // scoring units are (household, person) pairs — two siblings must never
+    // share a pending send or one's value would swallow the other's
+    async function firePut(key) {
+      const p = pendingScores.get(key);
+      if (!p) return;
+      clearTimeout(p.timer);
+      pendingScores.delete(key);
+      const [uid, pid] = key.split(':').map(Number);
+      inflight++;
+      try {
+        const { livePlay } = await api(`/live-plays/${current.id}/players/${uid}`, {
+          method: 'PUT',
+          body: { score: p.value, ...(pid ? { personId: pid } : {}) },
+        });
+        current = livePlay; // quiet refresh; no re-render mid-typing…
+        // …but reconcile this key's input so the DOM can't drift from current
+        const inp = modalEl.querySelector(`#lv-players .lv-score[data-key="${key}"]`);
+        if (inp && document.activeElement !== inp) {
+          const row = current.players.find((x) => `${x.id}:${x.person?.id || 0}` === key);
+          if (row) inp.value = row.score ?? '';
+        }
+      } catch (err) {
+        if (err.status === 404) endedElsewhere();
+        else toast(err.message);
+      } finally {
+        inflight--;
       }
-      unsent.add(uid);
-      debouncers.get(uid)(value);
     }
+    function sendScore(key, value) {
+      const prev = pendingScores.get(key);
+      if (prev) clearTimeout(prev.timer);
+      pendingScores.set(key, { value, timer: setTimeout(() => firePut(key), 500) });
+    }
+    function cancelScore(key) {
+      const p = pendingScores.get(key);
+      if (p) {
+        clearTimeout(p.timer);
+        pendingScores.delete(key);
+      }
+    }
+    const flushScores = () => Promise.all([...pendingScores.keys()].map((k) => firePut(k)));
 
     function endedElsewhere() {
       clearInterval(tick);
@@ -2310,29 +2618,49 @@ async function viewCrewDetail(id) {
       onFinishScreen = false;
       const body = $('#lv-body', modalEl);
       if (!body) return;
-      const inSession = new Set(current.players.map((p) => p.id));
-      const addable = members.filter((m) => !inSession.has(m.id));
+      const keyOf = (p) => `${p.id}:${p.person?.id || 0}`;
+      const inSession = new Set(current.players.map(keyOf));
+      // grain exclusivity per household: a bare row blocks person chips and
+      // vice versa — the X button is the escape hatch to switch mid-game
+      const addChips = [];
+      for (const m of members) {
+        const hasGrain = inSession.has(`${m.id}:0`);
+        const personsIn = current.players.filter((p) => p.id === m.id && p.person);
+        // bare chip only when the household isn't in at all; person chips stay
+        // available even over a bare row — the server's upgrade rule swaps the
+        // grain atomically and carries the typed score
+        if (!hasGrain && !personsIn.length) addChips.push(`<button class="chip-btn" data-addp="${m.id}:0">+ ${esc(m.displayName)}</button>`);
+        for (const per of m.people || []) {
+          if (!inSession.has(`${m.id}:${per.id}`)) {
+            addChips.push(`<button class="chip-btn person-chip" data-addp="${m.id}:${per.id}" style="--c:${memberColor(m.id)}">+ ${esc(per.name)}</button>`);
+          }
+        }
+      }
       body.innerHTML = `
         <div class="r-meta" style="margin-bottom:4px">${metaLine()}</div>
         <div class="live-timer" id="lv-timer">${liveElapsed(current.startedAt, 'timer')}</div>
         <div id="lv-players">
-          ${current.players.map((p) => `
-          <div class="owner-row" style="--c:${memberColor(p.id)}">
-            <label class="owner-main">
-              <span class="avatar">${esc(p.displayName.slice(0, 2).toUpperCase())}</span>
-              <span class="m-name">${esc(p.displayName)}</span>
+          ${current.players.map((p) => {
+            const key = keyOf(p);
+            const name = p.person ? p.person.name : p.displayName;
+            return `
+          <div class="owner-row${p.person ? ' person-row' : ''}" style="--c:${memberColor(p.id)}">
+            <label class="owner-main" title="${esc(p.person ? `${p.person.name} — ${p.displayName}` : p.displayName)}">
+              ${p.person ? '<span class="person-band" aria-hidden="true"></span>' : `<span class="avatar">${esc(p.displayName.slice(0, 2).toUpperCase())}</span>`}
+              <span class="m-name">${esc(name)}${p.person ? ` <span class="hh-tag">· ${esc(p.displayName.slice(0, 2).toUpperCase())}</span>` : ''}</span>
             </label>
             <span class="lv-stepper">
-              <button data-step="-1" data-uid="${p.id}" aria-label="Minus one for ${esc(p.displayName)}">−</button>
-              <input type="number" class="lv-score" data-uid="${p.id}" step="1" value="${p.score ?? ''}" placeholder="0" aria-label="${esc(p.displayName)} score">
-              <button data-step="1" data-uid="${p.id}" aria-label="Plus one for ${esc(p.displayName)}">+</button>
+              <button data-step="-1" data-key="${key}" aria-label="Minus one for ${esc(name)}">−</button>
+              <input type="number" class="lv-score" data-key="${key}" step="1" value="${p.score ?? ''}" placeholder="0" aria-label="${esc(name)} score">
+              <button data-step="1" data-key="${key}" aria-label="Plus one for ${esc(name)}">+</button>
             </span>
-            <button class="icon-btn" data-rm="${p.id}" title="Remove from this game">${icon('x')}</button>
-          </div>`).join('')}
+            <button class="icon-btn" data-rm="${key}" title="Remove from this game">${icon('x')}</button>
+          </div>`;
+          }).join('')}
         </div>
-        ${addable.length ? `<div class="owner-pick" style="margin-top:8px">
+        ${addChips.length ? `<div class="owner-pick" style="margin-top:8px">
           <span class="glabel">Add</span>
-          ${addable.map((m) => `<button class="chip-btn" data-addp="${m.id}">+ ${esc(m.displayName)}</button>`).join('')}
+          ${addChips.join('')}
         </div>` : ''}
         <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
           <button class="btn btn-primary" id="lv-finish">${icon('check')} Finish game</button>
@@ -2340,7 +2668,10 @@ async function viewCrewDetail(id) {
           <button class="btn btn-ghost btn-danger" id="lv-abandon">Abandon</button>
         </div>`;
 
-      $('#lv-finish').onclick = renderFinish;
+      $('#lv-finish').onclick = async () => {
+        await flushScores(); // typed-but-unsent scores must reach the server before the crown screen reads it
+        renderFinish();
+      };
       $('#lv-abandon').onclick = async () => {
         if (!window.confirm('Abandon this session? Nothing will be logged.')) return;
         try {
@@ -2356,15 +2687,17 @@ async function viewCrewDetail(id) {
       $('#lv-players').addEventListener('click', async (e) => {
         const step = e.target.closest('[data-step]');
         if (step) {
-          const inp = $(`#lv-players .lv-score[data-uid="${step.dataset.uid}"]`);
+          const inp = $(`#lv-players .lv-score[data-key="${step.dataset.key}"]`);
           inp.value = (parseInt(inp.value, 10) || 0) + Number(step.dataset.step);
-          sendScore(Number(step.dataset.uid), Number(inp.value));
+          sendScore(step.dataset.key, Number(inp.value));
           return;
         }
         const rm = e.target.closest('[data-rm]');
         if (rm) {
+          cancelScore(rm.dataset.rm); // a pending send must not resurrect the row we're removing
+          const [uid, pid] = rm.dataset.rm.split(':').map(Number);
           try {
-            const { livePlay } = await api(`/live-plays/${current.id}/players/${rm.dataset.rm}`, { method: 'DELETE' });
+            const { livePlay } = await api(`/live-plays/${current.id}/players/${uid}${pid ? `?personId=${pid}` : ''}`, { method: 'DELETE' });
             current = livePlay;
             modalDirty = true; // strip's "N playing" stays honest on close
             renderPad();
@@ -2378,15 +2711,20 @@ async function viewCrewDetail(id) {
         const inp = e.target.closest('.lv-score');
         if (!inp) return;
         const n = inp.value === '' ? null : Number(inp.value);
-        sendScore(Number(inp.dataset.uid), n != null && Number.isFinite(n) ? Math.round(n) : null);
+        sendScore(inp.dataset.key, n != null && Number.isFinite(n) ? Math.round(n) : null);
       });
       const addRow = body.querySelector('[data-addp]')?.parentElement;
       if (addRow) {
         addRow.addEventListener('click', async (e) => {
           const chip = e.target.closest('[data-addp]');
           if (!chip) return;
+          await flushScores(); // commit typed values before the add's response repaints the pad
+          const [uid, pid] = chip.dataset.addp.split(':').map(Number);
           try {
-            const { livePlay } = await api(`/live-plays/${current.id}/players/${chip.dataset.addp}`, { method: 'PUT', body: { score: null } });
+            const { livePlay } = await api(`/live-plays/${current.id}/players/${uid}`, {
+              method: 'PUT',
+              body: { score: null, ...(pid ? { personId: pid } : {}) },
+            });
             current = livePlay;
             modalDirty = true; // strip's "N playing" stays honest on close
             renderPad();
@@ -2404,11 +2742,12 @@ async function viewCrewDetail(id) {
       const body = $('#lv-body', modalEl);
       const isCoop = current.game.scoreDir === 'coop';
       // pre-crown from scores exactly like suggestCrowns: best score wins, ties crown all
+      const fKey = (p) => `${p.id}:${p.person?.id || 0}`;
       const scored = current.players.filter((p) => p.score != null);
       const preset = new Set();
       if (!isCoop && scored.length >= 2) {
         const best = current.game.scoreDir === 'low' ? Math.min(...scored.map((p) => p.score)) : Math.max(...scored.map((p) => p.score));
-        for (const p of scored) if (p.score === best) preset.add(p.id);
+        for (const p of scored) if (p.score === best) preset.add(fKey(p));
       }
       body.innerHTML = `
         <div class="r-meta" style="margin-bottom:10px">Duration: <strong id="lv-dur">${liveElapsed(current.startedAt)}</strong> — recorded automatically</div>
@@ -2420,7 +2759,7 @@ async function viewCrewDetail(id) {
         </div>` : `
         <label>Who won? <span style="font-weight:400">(tap to crown)</span></label>
         <div class="owner-pick" id="lv-crowns">
-          ${current.players.map((p) => `<button class="chip-btn ${preset.has(p.id) ? 'active' : ''}" data-lvwon="${p.id}">${icon('crown')} ${esc(p.displayName)}${p.score != null ? ` · ${p.score}` : ''}</button>`).join('')}
+          ${current.players.map((p) => `<button class="chip-btn ${preset.has(fKey(p)) ? 'active' : ''}" data-lvwon="${fKey(p)}" style="--c:${memberColor(p.id)}" title="${esc(p.person ? `${p.person.name} — ${p.displayName}` : p.displayName)}">${icon('crown')} ${esc(p.person ? p.person.name : p.displayName)}${p.person ? ` <span class="hh-tag">${esc(p.displayName.slice(0, 2).toUpperCase())}</span>` : ''}${p.score != null ? ` · ${p.score}` : ''}</button>`).join('')}
         </div>`}
         <label>Notes <span style="font-weight:400">(optional)</span></label>
         <input type="text" id="lv-notes" placeholder="e.g. closest game of the trip…">
@@ -2447,21 +2786,26 @@ async function viewCrewDetail(id) {
       }
       $('#lv-confirm').onclick = async () => {
         $('#lv-error').textContent = '';
+        await flushScores();
         const coopChip = $('#lv-coop .chip-btn.active');
         const coopResult = isCoop ? (coopChip ? coopChip.dataset.coop : null) : null;
-        const winnerIds = isCoop
-          ? (coopResult === 'win' ? current.players.map((p) => p.id) : [])
-          : [...body.querySelectorAll('#lv-crowns .chip-btn.active')].map((c) => Number(c.dataset.lvwon));
+        const toPair = (key) => {
+          const [uid, pid] = String(key).split(':').map(Number);
+          return { id: uid, ...(pid ? { personId: pid } : {}) };
+        };
+        const winners = isCoop
+          ? (coopResult === 'win' ? current.players.map((p) => toPair(fKey(p))) : [])
+          : [...body.querySelectorAll('#lv-crowns .chip-btn.active')].map((c) => toPair(c.dataset.lvwon));
         try {
           const { play, milestone } = await api(`/live-plays/${current.id}/finish`, {
             method: 'POST',
-            body: { winnerIds, notes: $('#lv-notes').value, playedAt: localISODate(), ...(coopResult ? { coopResult } : {}) },
+            body: { winners, notes: $('#lv-notes').value, playedAt: localISODate(), ...(coopResult ? { coopResult } : {}) },
           });
           if (coopResult === 'win') toast(`Logged — the crew beat ${current.game.title}!`);
           else if (coopResult === 'loss') toast(`Logged — ${current.game.title} wins this round`);
           else {
-            const winners = (play?.players || []).filter((p) => p.won);
-            toast(winners.length ? `Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => w.displayName).join(', ')}` : `Logged ${current.game.title}`);
+            const winnersWon = (play?.players || []).filter((p) => p.won);
+            toast(winnersWon.length ? `Logged — crown${winnersWon.length > 1 ? 's' : ''} to ${winnersWon.map((w) => (w.person ? w.person.name : w.displayName)).join(', ')}` : `Logged ${current.game.title}`);
           }
           if (milestone) {
             const n = milestone === 'quarter' ? 25 : milestone === 'dime' ? 10 : 5;
@@ -2496,7 +2840,7 @@ async function viewCrewDetail(id) {
     // focus guard is only for actual typing (buttons hold focus on Android,
     // which would starve the poll forever).
     const dirty = () =>
-      unsent.size > 0 ||
+      pendingScores.size > 0 ||
       inflight > 0 ||
       (document.activeElement && document.activeElement.matches && document.activeElement.matches('#lv-players input.lv-score'));
     async function refreshFromServer() {
@@ -2699,6 +3043,7 @@ async function openGameModal(gameId, extras = {}) {
         <div class="gd-tile"><div class="gd-num">${gstats.plays}</div><div class="gd-lbl">play${gstats.plays === 1 ? '' : 's'}</div></div>
         ${gstats.lastPlayedAt ? `<div class="gd-tile"><div class="gd-num">${fmtDay(gstats.lastPlayedAt)}</div><div class="gd-lbl">last played</div></div>` : ''}
         ${gstats.champion ? `<div class="gd-tile"><div class="gd-num">${icon('crown')} ${esc(gstats.champion.displayName)}</div><div class="gd-lbl">champion · ${gstats.champion.wins} win${gstats.champion.wins === 1 ? '' : 's'}</div></div>` : ''}
+        ${gstats.playerChampion ? `<div class="gd-tile"><div class="gd-num">${icon('crown')} ${esc(gstats.playerChampion.name)}</div><div class="gd-lbl">top player · ${gstats.playerChampion.wins} win${gstats.playerChampion.wins === 1 ? '' : 's'}</div></div>` : ''}
         ${gstats.bestScore ? `<div class="gd-tile"><div class="gd-num">${gstats.bestScore.score}${game.scoreDir === 'low' ? ' ↓' : ''}</div><div class="gd-lbl">record — ${esc(gstats.bestScore.displayName)}</div></div>` : ''}
         ${gstats.typicalDurationMin ? `<div class="gd-tile"><div class="gd-num">~${gstats.typicalDurationMin} min</div><div class="gd-lbl">usually runs</div></div>` : ''}
         ${gstats.coop && (gstats.coop.wins + gstats.coop.losses) ? `<div class="gd-tile"><div class="gd-num">${gstats.coop.wins}W–${gstats.coop.losses}L</div><div class="gd-lbl">co-op · vs the game</div></div>` : ''}
