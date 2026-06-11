@@ -364,3 +364,42 @@ Nothing — feature-complete as scoped.
   backup-pre-play-pack.db on volume + /tmp local (158 games verified).
 - Deferred from review: none. POST durationMin keeps spec'd silent-null (only
   PATCH 400s — create has nothing to destroy).
+
+## Phase 20: PLAYER LAYER — people within households, two-grain leaderboard. DEPLOYED
+- Process: 4-agent spec fleet (780k tokens; spec 1 verified the rebuild plan
+  against the real DB and caught the ON CONFLICT statement it breaks; spec 2
+  caught the view-during-RENAME boot brick) → serial implementation with
+  reconciled naming (nested person objects, /api/me/people, members[].people,
+  derived colors, upgrade-rule live PUT) → 4-lens review (17 findings, all
+  fixed) → 338 tests → machine v19.
+- Schema: people(household_id, name, retired_at, claimed_by reserved);
+  play_players/live_play_players REBUILT to PK(..,user_id,person_id),
+  person_id=0 sentinel; addPersonDimension (IMMEDIATE txn, pragma OFF/ON
+  outside, DROP VIEW first, FK-check inside, column-presence guard re-checked
+  in-txn); play_household_results view (MAX(won) per (play,household)) +
+  person index recreated every boot.
+- Server: parsePlayerEntries (mixed-grain 400) + personsValid(preAttached
+  pairs); person plumbing through POST/PATCH/live/finish (pairs + legacy
+  winnerIds expansion); playsFor/livePlaysFor person objects; members[].people
+  (active); /api/me/people CRUD (dup-incl-retired 409, cap 12 active,
+  referenced-delete retires); 5 household-grain view swaps + per-game +
+  eventsFor; player grain payload (standings plays>0 rule incl. retired,
+  champions/nemeses/records person-aware labels, untagged APPEARANCES).
+- Client: owner-block person chips → person rows (togglePerson single path,
+  composite uid:pid keys, has-people crown/score handoff, suggestCrowns over
+  scoringUnits); edit seeding incl. retired-chip injection + departed person
+  merge; live pad person rows (band + name + household initials), flushable
+  pendingScores (firePut/cancel/flush — replaced debouncers after the review
+  traced score-revert/resurrection races), grain-upgrade add chips; Players
+  toggle in stats-head (paint() repaint, no refetch), sibling nemesis lines,
+  untagged footnote; Account "My household" (in-place add keeps keyboard,
+  busy-guarded refresh, retire/un-retire/remove).
+- Review fixes: flush/cancel on roster changes + finish (MAJOR); upgrade
+  carries bare score; untagged counted as appearances; ONE roster rule
+  (plays>0, retired stays — consistent with champion/nemesis); migration
+  IMMEDIATE; hhRefresh zombie/double-submit; household-color identity
+  everywhere; #hh-list ellipsis; pad/crown household initials (title attrs
+  don't exist on touch); 44px chips; in-place add.
+- Prod: stats parity byte-identical pre/post rebuild; person lifecycle smoke
+  (create→tag→Players grain live→delete→zero residue); backups:
+  backup-pre-people.db on volume + local (158 games, play_players intact).
