@@ -188,8 +188,34 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
 // ===================== state & router =====================
 
 const state = { user: null };
+const tabbarEl = $('#tabbar');
+
+// shimmer placeholders while data loads (only shown if a fetch takes >150ms)
+function skeletonHtml() {
+  return `<div class="container">
+    <div class="skel skel-title"></div>
+    <div class="skel skel-line" style="width:38%"></div>
+    <div class="skel-grid">${Array.from({ length: 8 }, () => '<div class="skel skel-card"></div>').join('')}</div>
+  </div>`;
+}
+
+function renderTabbar(active) {
+  if (!state.user) {
+    tabbarEl.innerHTML = '';
+    return;
+  }
+  tabbarEl.innerHTML = `
+    <button class="tab-item ${active === 'library' ? 'active' : ''}" data-go="#/library">🎲<span>My Shelf</span></button>
+    <button class="tab-item ${active === 'crews' || active === 'crew' ? 'active' : ''}" data-go="#/crews">👥<span>Crews</span></button>
+    <button class="tab-item" id="tab-account">👤<span>Account</span></button>`;
+  for (const btn of tabbarEl.querySelectorAll('[data-go]')) {
+    btn.onclick = () => { location.hash = btn.dataset.go; };
+  }
+  $('#tab-account').onclick = openAccountModal;
+}
 
 function renderNav(active) {
+  renderTabbar(active);
   if (!state.user) {
     navEl.innerHTML = location.hash.startsWith('#/u/')
       ? `<a class="brand" href="#/welcome">🎲 Meeple Shelf</a><span class="nav-spacer"></span><a class="btn btn-primary btn-sm" href="#/welcome">Make your own shelf</a>`
@@ -218,6 +244,8 @@ async function route() {
   const hash = location.hash.replace(/^#\/?/, '');
   const [page, arg] = hash.split('/');
   renderNav(page || 'library');
+  // show a skeleton only when a load is actually slow (e.g. server cold-wake)
+  const skelTimer = setTimeout(() => { appEl.innerHTML = skeletonHtml(); }, 150);
   try {
     if (page === 'u' && arg) return await viewPublicShelf(arg);
     if (!state.user) return viewWelcome();
@@ -233,6 +261,8 @@ async function route() {
       return;
     }
     appEl.innerHTML = `<div class="container">${emptyState(e.status === 403 || e.status === 404 ? '🚪' : '⚠️', e.status === 404 ? 'Not found' : 'Hmm', esc(e.message), `<a class="btn" href="#/library">Back to my shelf</a>`)}</div>`;
+  } finally {
+    clearTimeout(skelTimer);
   }
 }
 
@@ -818,11 +848,11 @@ async function viewCrewDetail(id) {
     <div class="members-wrap">
       <div class="members-row" id="members-scroll">
         ${members.map((m) => `
-          <span class="member" style="--c:${memberColor(m.id)}">
+          <button class="member" data-member="${m.id}" title="Show only ${esc(m.displayName)}' games" style="--c:${memberColor(m.id)}">
             <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
             <span class="m-name">${esc(m.displayName)}</span>
             <span class="m-count">${m.gameCount}</span>
-          </span>`).join('')}
+          </button>`).join('')}
       </div>
       <div class="members-fade" id="members-fade">›</div>
     </div>
@@ -936,6 +966,9 @@ async function viewCrewDetail(id) {
     const n = activeFilterCount();
     $('#cw-filtertoggle').textContent = `Filters${n ? ' · ' + n : ''} ${crewState.filtersOpen ? '▴' : '▾'}`;
     $('#cw-filtertoggle').classList.toggle('active', n > 0);
+    for (const chip of appEl.querySelectorAll('#members-scroll .member')) {
+      chip.classList.toggle('active', String(crewState.owner) === chip.dataset.member);
+    }
   }
 
   function renderGames() {
@@ -1055,7 +1088,7 @@ async function viewCrewDetail(id) {
   };
 
   async function renderStats(container) {
-    container.innerHTML = `<div class="empty"><div class="e-emoji">🏆</div><p>Loading the leaderboard…</p></div>`;
+    container.innerHTML = `<div class="skel skel-line" style="width:34%;height:22px"></div><div class="skel skel-card" style="aspect-ratio:auto;height:200px;margin-top:14px"></div><div class="skel skel-line" style="width:50%;margin-top:18px"></div>`;
     let plays, stats;
     try {
       [{ plays }, stats] = await Promise.all([api(`/crews/${id}/plays`), api(`/crews/${id}/stats`)]);
@@ -1288,6 +1321,51 @@ async function viewCrewDetail(id) {
     scroller.addEventListener('scroll', updateFade, { passive: true });
     window.addEventListener('resize', updateFade, { passive: true });
     updateFade();
+
+    // tap a family chip → filter to their games (tap again to clear)
+    scroller.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-member]');
+      if (!chip) return;
+      crewState.owner = String(crewState.owner) === chip.dataset.member ? 'all' : chip.dataset.member;
+      const sel = $('#cw-owner');
+      if (sel) sel.value = String(crewState.owner);
+      if (crewState.view === 'stats') {
+        crewState.view = 'grid';
+        appEl.querySelectorAll('.segmented button').forEach((b) => b.classList.toggle('active', b.dataset.view === 'grid'));
+      }
+      renderGames();
+    });
+  }
+
+  // swipe left/right anywhere in the games area to switch views
+  {
+    const order = ['grid', 'matrix', 'stats'];
+    let touchStart = null;
+    const area = $('#cw-games');
+    area.addEventListener('touchstart', (e) => {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, target: e.target };
+    }, { passive: true });
+    area.addEventListener('touchend', (e) => {
+      const start = touchStart;
+      touchStart = null;
+      if (!start) return;
+      const dx = e.changedTouches[0].clientX - start.x;
+      const dy = e.changedTouches[0].clientY - start.y;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
+      // inside the who-has-what table, only switch views from its scroll edges
+      const wrap = start.target.closest?.('.matrix-wrap');
+      if (wrap) {
+        const max = wrap.scrollWidth - wrap.clientWidth;
+        if (dx < 0 && wrap.scrollLeft < max - 4) return;
+        if (dx > 0 && wrap.scrollLeft > 4) return;
+      }
+      const i = order.indexOf(crewState.view);
+      const next = order[dx < 0 ? Math.min(i + 1, order.length - 1) : Math.max(i - 1, 0)];
+      if (next === crewState.view) return;
+      crewState.view = next;
+      appEl.querySelectorAll('.segmented button').forEach((b) => b.classList.toggle('active', b.dataset.view === next));
+      renderGames();
+    }, { passive: true });
   }
 
   $('#crew-menu-btn').onclick = () => {
@@ -1316,13 +1394,23 @@ async function viewCrewDetail(id) {
 
 // Tap a card → description, details, and links to learn more about the game.
 async function openGameModal(gameId, extras = {}) {
+  // open instantly with a skeleton; fill when the data lands
+  openModal(`
+    <div class="modal-head"><h2>&nbsp;</h2><button class="modal-close">×</button></div>
+    <div class="modal-body">
+      <div class="gd-top"><div class="skel" style="width:124px;height:124px;flex:none"></div>
+      <div style="flex:1"><div class="skel skel-line" style="width:70%"></div><div class="skel skel-line" style="width:45%"></div></div></div>
+      <div class="skel skel-line"></div><div class="skel skel-line" style="width:85%"></div><div class="skel skel-line" style="width:60%"></div>
+    </div>`);
   let game;
   try {
     ({ game } = await api('/games/' + gameId));
   } catch (err) {
+    closeModal();
     toast(err.message);
     return;
   }
+  if (!modalRoot.innerHTML) return; // user closed the skeleton before data arrived
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   openModal(`
     <div class="modal-head"><h2>${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</h2><button class="modal-close">×</button></div>

@@ -353,6 +353,49 @@ select { width: auto; padding: 8px 10px; }
 .icon-btn.danger:hover { color: var(--danger); border-color: var(--danger); }
 .added-date { font-size: 11px; color: var(--faint); margin-top: 7px; }
 
+/* ---------- bottom tab bar (mobile) ---------- */
+#tabbar {
+  display: none;
+  position: fixed;
+  top: auto; /* the generic nav rule sets top: 0 — without this it stretches full-screen */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  gap: 0;
+  align-items: stretch;
+  background: rgba(24, 20, 18, 0.96);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  border-bottom: none;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0 7px;
+  font-size: 19px;
+  color: var(--muted);
+}
+.tab-item span { font-size: 10.5px; font-weight: 700; letter-spacing: 0.2px; }
+.tab-item.active { color: var(--accent-bright); }
+
+/* ---------- loading skeletons ---------- */
+.skel {
+  background: linear-gradient(90deg, var(--card) 25%, var(--card-hover) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+  border-radius: 10px;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+.skel-title { height: 30px; width: 55%; margin: 8px 0 12px; }
+.skel-line { height: 15px; margin: 9px 0; }
+.skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-top: 24px; }
+.skel-card { aspect-ratio: 1 / 1.4; }
+
 /* ---------- members row ---------- */
 .members-wrap { position: relative; margin: 4px 0 18px; }
 .members-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -382,6 +425,12 @@ select { width: auto; padding: 8px 10px; }
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 5px 13px 5px 6px;
+}
+button.member { cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+button.member:hover { background: var(--card); }
+.member.active {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
 }
 .avatar {
   width: 26px;
@@ -762,10 +811,16 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .page-head h1 { font-size: 22px; }
   .page-head { gap: 10px; }
   nav { padding: 10px 14px; gap: 10px; }
-  .container { padding: 18px 14px 70px; }
+  .container { padding: 18px 14px 96px; }
 
   /* hide verbose labels on small screens — icons carry the meaning */
   .seg-txt { display: none; }
+
+  /* bottom tabs replace top-nav links and account on phones */
+  #tabbar:not(:empty) { display: flex; }
+  .nav-links, .nav-user { display: none; }
+  #toast-root { bottom: 86px; }
+  .skel-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 
   /* 16px stops iOS Safari from auto-zooming focused inputs */
   input[type="text"], input[type="password"], input[type="number"], input[type="url"], input[type="date"], select, textarea { font-size: 16px; }

@@ -101,7 +101,7 @@ document.getElementById('app').innerHTML = \`
   </div>
   <div class="members-wrap">
     <div class="members-row" id="members-scroll">
-      \${DATA.members.map((m) => \`<span class="member" style="--c:\${memberColor(m.id)}"><span class="avatar">\${esc(m.displayName.slice(0, 2).toUpperCase())}</span><span class="m-name">\${esc(m.displayName)}</span><span class="m-count">\${m.gameCount}</span></span>\`).join('')}
+      \${DATA.members.map((m) => \`<button class="member" data-member="\${m.id}" style="--c:\${memberColor(m.id)}"><span class="avatar">\${esc(m.displayName.slice(0, 2).toUpperCase())}</span><span class="m-name">\${esc(m.displayName)}</span><span class="m-count">\${m.gameCount}</span></button>\`).join('')}
     </div>
     <div class="members-fade" id="members-fade">›</div>
   </div>
@@ -183,6 +183,7 @@ function card(g, expansions, expanded) {
 function render() {
   const list = filtered();
   document.getElementById('f-count').textContent = list.length + ' of ' + DATA.games.length + ' games';
+  document.querySelectorAll('#members-scroll .member').forEach((c) => c.classList.toggle('active', String(state.owner) === c.dataset.member));
   const el = document.getElementById('games');
   if (!list.length) {
     el.innerHTML = '<div class="empty"><div class="e-emoji">🫥</div><h2>No games match</h2><p>Try loosening the filters.</p></div>';
@@ -341,6 +342,15 @@ document.getElementById('surprise-result').addEventListener('click', (e) => {
   scroller.addEventListener('scroll', updateFade, { passive: true });
   window.addEventListener('resize', updateFade, { passive: true });
   updateFade();
+
+  scroller.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-member]');
+    if (!chip) return;
+    state.owner = String(state.owner) === chip.dataset.member ? 'all' : chip.dataset.member;
+    const sel = document.getElementById('f-owner');
+    if (sel) sel.value = String(state.owner);
+    render();
+  });
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
