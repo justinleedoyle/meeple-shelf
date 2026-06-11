@@ -807,7 +807,7 @@ async function viewCrewDetail(id) {
 
     <div class="stats-line">${games.length} unique game${games.length === 1 ? '' : 's'} across ${members.length} shel${members.length === 1 ? 'f' : 'ves'}${multiOwned ? ` · ${multiOwned} owned by more than one person` : ''}</div>
 
-    <div class="filter-bar">
+    <div class="filter-bar" id="cw-filters">
       <input type="text" class="search" id="cw-q" placeholder="Search games…" value="${esc(crewState.q)}">
       <div class="filter-group" id="players-chips">
         <span class="glabel">Players</span>
@@ -849,6 +849,7 @@ async function viewCrewDetail(id) {
       <div class="segmented">
         <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
         <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
+        <button data-view="stats" class="${crewState.view === 'stats' ? 'active' : ''}">🏆 Leaderboard</button>
       </div>
     </div>
 
@@ -892,9 +893,16 @@ async function viewCrewDetail(id) {
   }
 
   function renderGames() {
+    const container = $('#cw-games');
+    if (crewState.view === 'stats') {
+      $('#cw-filters').style.display = 'none';
+      $('#cw-count').textContent = '';
+      renderStats(container);
+      return;
+    }
+    $('#cw-filters').style.display = '';
     const list = filtered();
     $('#cw-count').textContent = `${list.length} of ${games.length} games`;
-    const container = $('#cw-games');
     if (!list.length) {
       container.innerHTML = emptyState('🫥', 'No games match', 'Try loosening the filters — or get someone to buy more games.');
       return;
@@ -981,6 +989,194 @@ async function viewCrewDetail(id) {
     if (game) openOwnersModal(crew, game, members);
   });
 
+  // ---- leaderboard ----
+  const fmtDay = (s) => {
+    const d = new Date(s + 'T00:00');
+    return isNaN(d) ? s : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
+  async function renderStats(container) {
+    container.innerHTML = `<div class="empty"><div class="e-emoji">🏆</div><p>Loading the leaderboard…</p></div>`;
+    let plays, stats;
+    try {
+      [{ plays }, stats] = await Promise.all([api(`/crews/${id}/plays`), api(`/crews/${id}/stats`)]);
+    } catch (e) {
+      container.innerHTML = emptyState('⚠️', 'Hmm', esc(e.message));
+      return;
+    }
+    if (crewState.view !== 'stats') return; // user switched away while loading
+
+    const medals = ['🥇', '🥈', '🥉'];
+    container.innerHTML = `
+      <div class="stats-head">
+        <div class="stats-blurb">${stats.totalPlays} play${stats.totalPlays === 1 ? '' : 's'} logged</div>
+        <button class="btn btn-primary" id="log-play-btn">📝 Log a play</button>
+      </div>
+
+      ${stats.totalPlays === 0 ? emptyState('🎲', 'No plays yet', 'Log your first game and the standings begin. Every rivalry starts somewhere.') : `
+      <div class="stats-section">
+        <h3>Standings</h3>
+        <div class="matrix-wrap"><table class="matrix">
+          <thead><tr><th style="text-align:left">Household</th><th>Plays</th><th>Wins</th><th>Win %</th></tr></thead>
+          <tbody>
+            ${stats.standings.map((s, i) => `<tr>
+              <td><span class="medal">${s.wins > 0 && i < 3 ? medals[i] : ''}</span> <span class="avatar" style="--c:${memberColor(s.id)};background:${memberColor(s.id)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle">${esc(s.displayName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.displayName)}</span></td>
+              <td>${s.plays}</td>
+              <td>${s.wins}</td>
+              <td>${s.plays ? s.winRate + '%' : '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="stats-section">
+        <h3>Most played</h3>
+        <div class="search-results" style="max-height:none">
+          ${stats.topGames.map((g) => `
+          <div class="result-row">
+            ${g.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow"><div class="r-title">${esc(g.title)}</div></div>
+            <span class="badge">${g.plays} play${g.plays === 1 ? '' : 's'}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="stats-section">
+        <h3>Recent plays</h3>
+        <div class="search-results" style="max-height:none" id="play-feed">
+          ${plays.map((p) => `
+          <div class="result-row" data-play="${p.id}">
+            ${p.game.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(p.game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow">
+              <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}</span></div>
+              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? '👑 ' : ''}${esc(pl.displayName)}</span>`).join('')}</div>
+              ${p.notes ? `<div class="card-notes">${esc(p.notes)}</div>` : ''}
+            </div>
+            <button class="icon-btn danger" data-del-play="${p.id}" title="Delete this play">✕</button>
+          </div>`).join('')}
+        </div>
+      </div>`}
+    `;
+
+    $('#log-play-btn').onclick = () => openLogPlayModal();
+    if ($('#play-feed')) {
+      $('#play-feed').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-del-play]');
+        if (!btn) return;
+        if (!window.confirm('Delete this play?')) return;
+        await api(`/crews/${id}/plays/${btn.dataset.delPlay}`, { method: 'DELETE' });
+        toast('Play deleted');
+        renderGames();
+      });
+    }
+  }
+
+  function openLogPlayModal(preGame = null) {
+    let selectedGame = preGame;
+    const today = new Date();
+    const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    openModal(`
+      <div class="modal-head"><h2>Log a play</h2><button class="modal-close">×</button></div>
+      <div class="modal-body">
+        <label>Game</label>
+        <div id="lp-game-area"></div>
+        <label>When</label>
+        <input type="date" id="lp-date" value="${localDate}">
+        <label>Who played? <span style="font-weight:400">(tap 👑 for the winners — everyone for a co-op win)</span></label>
+        <div id="lp-players">
+          ${members.map((m) => `
+          <div class="owner-row" style="--c:${memberColor(m.id)}">
+            <label class="owner-main">
+              <input type="checkbox" value="${m.id}">
+              <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
+              <span class="m-name">${esc(m.displayName)}</span>
+            </label>
+            <button class="chip-btn lp-won" data-won="${m.id}" disabled>👑 Won</button>
+          </div>`).join('')}
+        </div>
+        <label>Notes <span style="font-weight:400">(optional)</span></label>
+        <input type="text" id="lp-notes" placeholder="e.g. closest game of the trip…">
+        <div class="form-error" id="lp-error"></div>
+        <button class="btn btn-primary" id="lp-save" style="margin-top:14px">Log it</button>
+      </div>`);
+
+    function renderGameArea() {
+      const area = $('#lp-game-area');
+      if (selectedGame) {
+        area.innerHTML = `
+          <div class="result-row">
+            ${selectedGame.imageUrl ? `<img class="r-thumb" src="${esc(selectedGame.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow"><div class="r-title">${esc(selectedGame.title)}</div></div>
+            <button class="btn btn-sm" id="lp-change">Change</button>
+          </div>`;
+        $('#lp-change').onclick = () => { selectedGame = null; renderGameArea(); };
+      } else {
+        area.innerHTML = `
+          <input type="text" id="lp-q" placeholder="Search the crew's games…" autocomplete="off">
+          <div class="search-results" id="lp-results"></div>`;
+        const resultsEl = $('#lp-results');
+        const renderResults = (q) => {
+          const ql = q.trim().toLowerCase();
+          if (ql.length < 2) { resultsEl.innerHTML = ''; return; }
+          const matches = games.filter((g) => g.title.toLowerCase().includes(ql)).slice(0, 8);
+          resultsEl.innerHTML = matches.length
+            ? matches.map((g, i) => `
+              <div class="result-row" data-pick="${g.id}" style="cursor:pointer">
+                ${g.imageUrl ? `<img class="r-thumb" src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+                <div class="r-grow"><div class="r-title">${esc(g.title)}</div></div>
+              </div>`).join('')
+            : `<div class="search-hint">No crew game matches “${esc(q)}”.</div>`;
+        };
+        $('#lp-q').oninput = (e) => renderResults(e.target.value);
+        resultsEl.addEventListener('click', (e) => {
+          const row = e.target.closest('[data-pick]');
+          if (!row) return;
+          selectedGame = games.find((g) => g.id === Number(row.dataset.pick));
+          renderGameArea();
+        });
+        $('#lp-q').focus();
+      }
+    }
+    renderGameArea();
+
+    for (const cb of modalRoot.querySelectorAll('#lp-players input[type="checkbox"]')) {
+      cb.onchange = () => {
+        const won = modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`);
+        won.disabled = !cb.checked;
+        if (!cb.checked) won.classList.remove('active');
+      };
+    }
+    modalRoot.querySelector('#lp-players').addEventListener('click', (e) => {
+      const btn = e.target.closest('.lp-won');
+      if (!btn || btn.disabled) return;
+      btn.classList.toggle('active');
+    });
+
+    $('#lp-save').onclick = async () => {
+      $('#lp-error').textContent = '';
+      if (!selectedGame) { $('#lp-error').textContent = 'Pick the game you played'; return; }
+      const players = [...modalRoot.querySelectorAll('#lp-players input:checked')].map((cb) => ({
+        id: Number(cb.value),
+        won: modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`).classList.contains('active'),
+      }));
+      if (!players.length) { $('#lp-error').textContent = 'Pick who played'; return; }
+      try {
+        await api(`/crews/${id}/plays`, {
+          method: 'POST',
+          body: { gameId: selectedGame.id, playedAt: $('#lp-date').value, players, notes: $('#lp-notes').value },
+        });
+        const winners = players.filter((p) => p.won);
+        toast(winners.length ? `🏆 Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => members.find((m) => m.id === w.id)?.displayName).join(', ')}` : `Logged ${selectedGame.title}`);
+        crewState.view = 'stats';
+        modalDirty = true;
+        closeModal();
+      } catch (err) {
+        $('#lp-error').textContent = err.message;
+      }
+    };
+  }
+
   // ---- the game night picker: current filters + dice ----
   function surpriseHtml(g, final) {
     return `
@@ -991,9 +1187,10 @@ async function viewCrewDetail(id) {
           <div class="sb-title">${esc(g.title)}</div>
           ${final ? `<div class="sb-meta">${[fmtPlayers(g), fmtTime(g)].filter(Boolean).join(' · ')}${g.owners?.length ? ` · owned by ${esc(g.owners.map((o) => o.displayName).join(', '))}` : ''}</div>` : ''}
         </div>
-        ${final ? `<div class="sb-actions"><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">✕</button></div>` : ''}
+        ${final ? `<div class="sb-actions"><button class="btn btn-sm btn-primary" id="sb-played">📝 We played it</button><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">✕</button></div>` : ''}
       </div>`;
   }
+  let lastRoll = null;
   function rollSurprise() {
     const pool = filtered().filter((g) => !g.expansionOf && g.category !== 'Expansion for Base-game');
     if (!pool.length) return toast('No eligible games with these filters');
@@ -1003,11 +1200,13 @@ async function viewCrewDetail(id) {
     const itv = setInterval(() => {
       const g = pool[Math.floor(Math.random() * pool.length)];
       banner.innerHTML = surpriseHtml(g, spins >= 14);
+      if (spins >= 14) lastRoll = g;
       if (spins++ >= 14) clearInterval(itv);
     }, 70);
   }
   $('#surprise-btn').onclick = rollSurprise;
   $('#surprise-result').addEventListener('click', (e) => {
+    if (e.target.closest('#sb-played') && lastRoll) openLogPlayModal(lastRoll);
     if (e.target.closest('#sb-again')) rollSurprise();
     if (e.target.closest('#sb-close')) {
       $('#surprise-result').style.display = 'none';

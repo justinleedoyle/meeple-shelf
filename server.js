@@ -543,6 +543,145 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
   });
 });
 
+// ---------- plays & leaderboard ----------
+
+function memberOfCrew(req, res) {
+  const crew = db.prepare('SELECT * FROM crews WHERE id = ?').get(req.params.id);
+  if (!crew) {
+    res.status(404).json({ error: 'Crew not found' });
+    return null;
+  }
+  const isMember = db
+    .prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?')
+    .get(crew.id, req.user.id);
+  if (!isMember) {
+    res.status(403).json({ error: 'You are not a member of this crew' });
+    return null;
+  }
+  return crew;
+}
+
+function playsFor(crewId, limit = 100) {
+  const rows = db
+    .prepare(
+      `SELECT p.id AS play_id, p.played_at, p.notes AS play_notes, g.*
+       FROM plays p JOIN games g ON g.id = p.game_id
+       WHERE p.crew_id = ? ORDER BY p.played_at DESC, p.id DESC LIMIT ?`
+    )
+    .all(crewId, limit);
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.play_id);
+  const players = db
+    .prepare(
+      `SELECT pp.play_id, pp.won, u.id, u.display_name FROM play_players pp
+       JOIN users u ON u.id = pp.user_id
+       WHERE pp.play_id IN (${ids.map(() => '?').join(',')}) ORDER BY u.display_name`
+    )
+    .all(...ids);
+  const byPlay = new Map();
+  for (const p of players) {
+    if (!byPlay.has(p.play_id)) byPlay.set(p.play_id, []);
+    byPlay.get(p.play_id).push({ id: p.id, displayName: p.display_name, won: !!p.won });
+  }
+  return rows.map((r) => ({
+    id: r.play_id,
+    playedAt: r.played_at,
+    notes: r.play_notes,
+    game: gameToJson(r),
+    players: byPlay.get(r.play_id) || [],
+  }));
+}
+
+app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.body.gameId);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const memberIds = db
+    .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
+    .all(crew.id)
+    .map((r) => r.user_id);
+  const seen = new Map();
+  for (const p of Array.isArray(req.body.players) ? req.body.players : []) {
+    const id = Number(p.id);
+    if (Number.isInteger(id)) seen.set(id, p.won ? 1 : 0);
+  }
+  if (!seen.size) return res.status(400).json({ error: 'Pick who played' });
+  for (const id of seen.keys()) {
+    if (!memberIds.includes(id)) return res.status(400).json({ error: 'All players must be members of this crew' });
+  }
+
+  let playedAt = String(req.body.playedAt || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(playedAt)) playedAt = new Date().toISOString().slice(0, 10);
+  const notes = String(req.body.notes || '').slice(0, 300);
+
+  let playId;
+  db.transaction(() => {
+    playId = db
+      .prepare('INSERT INTO plays (crew_id, game_id, played_at, notes, logged_by) VALUES (?, ?, ?, ?, ?)')
+      .run(crew.id, game.id, playedAt, notes, req.user.id).lastInsertRowid;
+    for (const [uid, won] of seen) {
+      db.prepare('INSERT INTO play_players (play_id, user_id, won) VALUES (?, ?, ?)').run(playId, uid, won);
+    }
+  })();
+  res.status(201).json({ play: playsFor(crew.id, 200).find((p) => p.id === Number(playId)) });
+});
+
+app.get('/api/crews/:id/plays', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  res.json({ plays: playsFor(crew.id) });
+});
+
+app.delete('/api/crews/:id/plays/:playId', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const info = db.prepare('DELETE FROM plays WHERE id = ? AND crew_id = ?').run(req.params.playId, crew.id);
+  if (info.changes === 0) return res.status(404).json({ error: 'Play not found' });
+  res.json({ ok: true });
+});
+
+app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const totals = db
+    .prepare(
+      `SELECT u.id, u.display_name, COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins
+       FROM play_players pp
+       JOIN plays p ON p.id = pp.play_id
+       JOIN users u ON u.id = pp.user_id
+       WHERE p.crew_id = ? GROUP BY u.id`
+    )
+    .all(crew.id);
+  const byId = new Map(totals.map((t) => [t.id, t]));
+  const members = db
+    .prepare(
+      `SELECT u.id, u.display_name FROM crew_members cm JOIN users u ON u.id = cm.user_id
+       WHERE cm.crew_id = ? ORDER BY cm.joined_at, u.id`
+    )
+    .all(crew.id);
+  const standings = members
+    .map((m) => {
+      const t = byId.get(m.id);
+      const plays = t?.plays || 0;
+      const wins = t?.wins || 0;
+      return { id: m.id, displayName: m.display_name, plays, wins, winRate: plays ? Math.round((wins / plays) * 100) : 0 };
+    })
+    .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.plays - a.plays || a.displayName.localeCompare(b.displayName));
+
+  const topGames = db
+    .prepare(
+      `SELECT g.id, g.title, g.image_url AS imageUrl, COUNT(*) AS plays
+       FROM plays p JOIN games g ON g.id = p.game_id
+       WHERE p.crew_id = ? GROUP BY g.id ORDER BY plays DESC, g.title COLLATE NOCASE LIMIT 8`
+    )
+    .all(crew.id);
+
+  const totalPlays = db.prepare('SELECT COUNT(*) AS n FROM plays WHERE crew_id = ?').get(crew.id).n;
+  res.json({ standings, topGames, totalPlays });
+});
+
 app.post('/api/crews/:id/leave', requireAuth, (req, res) => {
   const info = db
     .prepare('DELETE FROM crew_members WHERE crew_id = ? AND user_id = ?')

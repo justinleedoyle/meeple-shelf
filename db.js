@@ -65,6 +65,24 @@ CREATE TABLE IF NOT EXISTS crew_members (
   joined_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (crew_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS plays (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  crew_id INTEGER NOT NULL REFERENCES crews(id) ON DELETE CASCADE,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  played_at TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  logged_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_plays_crew ON plays(crew_id, played_at);
+
+CREATE TABLE IF NOT EXISTS play_players (
+  play_id INTEGER NOT NULL REFERENCES plays(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  won INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (play_id, user_id)
+);
 `);
 
 // migrations for databases created before these columns existed

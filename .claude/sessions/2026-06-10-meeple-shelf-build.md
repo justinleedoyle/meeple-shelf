@@ -183,3 +183,15 @@ Nothing — feature-complete as scoped.
 6. "Recently added" strip + game detail view (big art, owners, loans, BGG link)
 7. When BGG API token arrives: full-size art, live lookups (BGG_API_TOKEN env
    var w/ fallback), BGG collection import
+
+## Phase 12 (same day): LEADERBOARD shipped
+- plays + play_players tables; POST/GET/DELETE /api/crews/:id/plays and GET
+  /api/crews/:id/stats (standings all-members zero-filled, topGames, totalPlays).
+- Crew page third view "🏆 Leaderboard": standings w/ medals, most played,
+  recent plays feed w/ delete. "📝 Log a play" modal: game search (crew games),
+  date, per-household played + 👑 won toggles (co-op = everyone wins), notes.
+  Surprise banner gained "📝 We played it" pre-filled logging.
+- Plays are HOUSEHOLD-level by design (accounts = households; trip = one per).
+- 8/8 API tests passed; UI verified locally (logged+deleted test play); prod
+  smoke-tested (log/stats/delete) — board left at 0 plays for the trip.
+- Backlog item 1 done; static page stats view = future enhancement.

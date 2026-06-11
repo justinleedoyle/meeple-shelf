@@ -112,7 +112,7 @@ button.nav-user:hover { color: var(--text); background: var(--card); }
 .btn-sm { padding: 5px 11px; font-size: 13px; border-radius: 8px; }
 .btn[disabled] { opacity: 0.5; cursor: default; }
 
-input[type="text"], input[type="password"], input[type="number"], input[type="url"], select, textarea {
+input[type="text"], input[type="password"], input[type="number"], input[type="url"], input[type="date"], select, textarea {
   width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
@@ -538,6 +538,28 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 .owner-row select.loc { width: auto; max-width: 46%; font-size: 13px; padding: 6px 8px; }
 .owner-row select.loc:disabled { opacity: 0.35; }
 
+/* leaderboard */
+.stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+.stats-blurb { color: var(--muted); font-size: 14px; font-weight: 600; }
+.stats-section { margin-bottom: 28px; }
+.stats-section h3 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+}
+.medal { display: inline-block; width: 22px; }
+.lp-won { flex: none; }
+.lp-won:disabled { opacity: 0.3; cursor: default; }
+
 /* packed toggle (static/offline page) */
 .pack-btn {
   position: absolute;
@@ -678,7 +700,7 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .container { padding: 18px 14px 70px; }
 
   /* 16px stops iOS Safari from auto-zooming focused inputs */
-  input[type="text"], input[type="password"], input[type="number"], input[type="url"], select, textarea { font-size: 16px; }
+  input[type="text"], input[type="password"], input[type="number"], input[type="url"], input[type="date"], select, textarea { font-size: 16px; }
 
   /* comfortable touch targets */
   .btn { padding: 10px 16px; }
