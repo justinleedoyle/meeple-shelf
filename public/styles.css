@@ -30,6 +30,31 @@ body {
 }
 
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+
+/* stroke icon set */
+.icon {
+  width: 1.05em;
+  height: 1.05em;
+  display: inline-block;
+  vertical-align: -0.16em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.icon.gold { color: #f5c542; }
+.icon.silver { color: #c0c4ce; }
+.icon.bronze { color: #cd8f5a; }
+.icon.accent { color: var(--accent-bright); }
+.tab-item .icon { width: 22px; height: 22px; }
+.auth-logo .icon { width: 46px; height: 46px; }
+.empty .e-emoji .icon { width: 44px; height: 44px; color: var(--muted); }
+.sb-cover .icon { width: 26px; height: 26px; color: var(--muted); }
+.cover-die .icon { width: 16px; height: 16px; }
+.medal .icon { width: 17px; height: 17px; }
+.brand .icon { width: 19px; height: 19px; }
 input, select, textarea { font: inherit; }
 a { color: var(--accent-bright); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -593,6 +618,7 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   border: 1px solid var(--line);
   background: var(--card);
 }
+.modal-close .icon { width: 19px; height: 19px; vertical-align: middle; }
 .modal-close:hover { color: var(--text); background: var(--card-hover); }
 .modal-body { padding: 14px 20px 20px; }
 

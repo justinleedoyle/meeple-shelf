@@ -12,6 +12,9 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// stroke icon from the sprite — themeable via currentColor, identical on every platform
+const icon = (name, cls = '') => `<svg class="icon${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="/icons.svg#i-${name}"/></svg>`;
+
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
@@ -39,16 +42,16 @@ function fmtPlayers(g) {
   if (g.minPlayers == null && g.maxPlayers == null) return null;
   const min = g.minPlayers ?? g.maxPlayers;
   const max = g.maxPlayers ?? g.minPlayers;
-  if (max >= 20) return `👥 ${min}+`;
-  return `👥 ${min === max ? min : `${min}–${max}`}`;
+  if (max >= 20) return `${icon('users')} ${min}+`;
+  return `${icon('users')} ${min === max ? min : `${min}–${max}`}`;
 }
 
 function fmtTime(g) {
   const t = g.playTime;
   if (!t) return null;
-  if (t < 90) return `⏱ ${t} min`;
+  if (t < 90) return `${icon('clock')} ${t} min`;
   const hrs = t / 60;
-  return `⏱ ${Number.isInteger(hrs) ? hrs : hrs.toFixed(1)} hr`;
+  return `${icon('clock')} ${Number.isInteger(hrs) ? hrs : hrs.toFixed(1)} hr`;
 }
 
 function fmtDate(s) {
@@ -72,7 +75,7 @@ function localISODate() {
 function loanBadge(loanedTo, dueDate) {
   if (!loanedTo) return '';
   const overdue = dueDate && dueDate < localISODate();
-  return `<span class="badge loan${overdue ? ' overdue' : ''}">📍 with ${esc(loanedTo.displayName)}${dueDate ? ` · due ${fmtDay(dueDate)}` : ''}</span>`;
+  return `<span class="badge loan${overdue ? ' overdue' : ''}">${icon(overdue ? 'alarm' : 'pin')} with ${esc(loanedTo.displayName)}${dueDate ? ` · due ${fmtDay(dueDate)}` : ''}</span>`;
 }
 
 const milestoneTier = (n) => (n >= 25 ? { label: '25+', n: 25 } : n >= 10 ? { label: '10+', n: 10 } : n >= 5 ? { label: '5+', n: 5 } : null);
@@ -156,8 +159,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal
 
 // ===================== shared renderers =====================
 
-function emptyState(emoji, title, bodyHtml, ctaHtml = '') {
-  return `<div class="empty"><div class="e-emoji">${emoji}</div><h2>${title}</h2><p>${bodyHtml}</p>${ctaHtml}</div>`;
+function emptyState(iconName, title, bodyHtml, ctaHtml = '') {
+  return `<div class="empty"><div class="e-emoji">${icon(iconName)}</div><h2>${title}</h2><p>${bodyHtml}</p>${ctaHtml}</div>`;
 }
 
 // Group a filtered list so expansions nest under their base game's card —
@@ -191,14 +194,14 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
   <div class="game-card"${entryId ? ` data-entry="${entryId}"` : ''}${gameId ? ` data-game="${gameId}"` : ''}>
     <div class="cover" style="background:linear-gradient(135deg, ${grad[0]}, ${grad[1]})">
       <span class="cover-letter">${esc((game.title || '?')[0].toUpperCase())}</span>
-      <span class="cover-die">🎲</span>
+      <span class="cover-die">${icon('dice')}</span>
       ${game.imageUrl ? `<img loading="lazy" src="${esc(game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
     </div>
     ${actions ? `<div class="card-actions">
-      <button class="icon-btn" data-act="edit" title="Edit details">✎</button>
+      <button class="icon-btn" data-act="edit" title="Edit details">${icon('pencil')}</button>
     </div>` : ''}
     ${editOwners ? `<div class="card-actions">
-      <button class="icon-btn" data-act="owners" title="Edit who owns this">✎</button>
+      <button class="icon-btn" data-act="owners" title="Edit who owns this">${icon('pencil')}</button>
     </div>` : ''}
     <div class="card-body">
       <div class="card-title">${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</div>
@@ -206,11 +209,11 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
         ${players ? `<span class="badge">${players}</span>` : ''}
         ${time ? `<span class="badge">${time}</span>` : ''}
         ${game.category ? `<span class="badge">${esc(game.category)}</span>` : ''}
-        ${(() => { const ms = milestoneTier(playCount || 0); return ms ? `<span class="badge milestone" title="${ms.n}+ crew plays">🎖 ${ms.label}</span>` : ''; })()}
+        ${(() => { const ms = milestoneTier(playCount || 0); return ms ? `<span class="badge milestone" title="${ms.n}+ crew plays">${icon('award')} ${ms.label}</span>` : ''; })()}
         ${loanBadge(loanedTo, dueDate)}
       </div>
       ${notes ? `<div class="card-notes">${esc(notes)}</div>` : ''}
-      ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}${o.dueDate && o.dueDate < localISODate() ? ' ⏰' : ''}` : ''}</span>`).join('')}</div>` : ''}
+      ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}${o.dueDate && o.dueDate < localISODate() ? ' ' + icon('alarm') : ''}` : ''}</span>`).join('')}</div>` : ''}
       ${expansions?.length ? `<button class="exp-line" data-act="toggle-exp" title="${esc(expansions.map((e) => `${expShortTitle(e)} (${(e.owners || []).map((o) => o.displayName).join(', ')})`).join('\n'))}">＋ ${expansions.length} expansion${expansions.length > 1 ? 's' : ''} ${expanded ? '▾' : '▸'}</button>` : ''}
       ${addedAt ? `<div class="added-date">Added ${fmtDate(addedAt)}</div>` : ''}
     </div>
@@ -237,9 +240,9 @@ function renderTabbar(active) {
     return;
   }
   tabbarEl.innerHTML = `
-    <button class="tab-item ${active === 'library' ? 'active' : ''}" data-go="#/library">🎲<span>My Shelf</span></button>
-    <button class="tab-item ${active === 'crews' || active === 'crew' ? 'active' : ''}" data-go="#/crews">👥<span>Crews</span></button>
-    <button class="tab-item" id="tab-account">👤<span>Account</span></button>`;
+    <button class="tab-item ${active === 'library' ? 'active' : ''}" data-go="#/library">${icon('dice')}<span>My Shelf</span></button>
+    <button class="tab-item ${active === 'crews' || active === 'crew' ? 'active' : ''}" data-go="#/crews">${icon('users')}<span>Crews</span></button>
+    <button class="tab-item" id="tab-account">${icon('user')}<span>Account</span></button>`;
   for (const btn of tabbarEl.querySelectorAll('[data-go]')) {
     btn.onclick = () => { location.hash = btn.dataset.go; };
   }
@@ -250,18 +253,18 @@ function renderNav(active) {
   renderTabbar(active);
   if (!state.user) {
     navEl.innerHTML = location.hash.startsWith('#/u/')
-      ? `<a class="brand" href="#/welcome">🎲 Meeple Shelf</a><span class="nav-spacer"></span><a class="btn btn-primary btn-sm" href="#/welcome">Make your own shelf</a>`
+      ? `<a class="brand" href="#/welcome">${icon('dice', 'accent')} Meeple Shelf</a><span class="nav-spacer"></span><a class="btn btn-primary btn-sm" href="#/welcome">Make your own shelf</a>`
       : '';
     return;
   }
   navEl.innerHTML = `
-    <a class="brand" href="#/library">🎲 Meeple Shelf</a>
+    <a class="brand" href="#/library">${icon('dice', 'accent')} Meeple Shelf</a>
     <div class="nav-links">
       <a class="nav-link ${active === 'library' ? 'active' : ''}" href="#/library">My Shelf</a>
       <a class="nav-link ${active === 'crews' || active === 'crew' ? 'active' : ''}" href="#/crews">Crews</a>
     </div>
     <span class="nav-spacer"></span>
-    <button class="nav-user" id="account-btn" title="Account settings">👤<span class="seg-txt"> ${esc(state.user.displayName)} ▾</span></button>
+    <button class="nav-user" id="account-btn" title="Account settings">${icon('user')}<span class="seg-txt"> ${esc(state.user.displayName)} ▾</span></button>
     <button class="btn btn-ghost btn-sm seg-txt" id="logout-btn">Log out</button>`;
   $('#account-btn').onclick = openAccountModal;
   $('#logout-btn').onclick = async () => {
@@ -292,7 +295,7 @@ async function route() {
       viewWelcome();
       return;
     }
-    appEl.innerHTML = `<div class="container">${emptyState(e.status === 403 || e.status === 404 ? '🚪' : '⚠️', e.status === 404 ? 'Not found' : 'Hmm', esc(e.message), `<a class="btn" href="#/library">Back to my shelf</a>`)}</div>`;
+    appEl.innerHTML = `<div class="container">${emptyState('alert', e.status === 404 ? 'Not found' : 'Hmm', esc(e.message), `<a class="btn" href="#/library">Back to my shelf</a>`)}</div>`;
   } finally {
     clearTimeout(skelTimer);
   }
@@ -300,7 +303,7 @@ async function route() {
 
 function openAccountModal() {
   openModal(`
-    <div class="modal-head"><h2>Account</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>Account</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div style="color:var(--muted);font-size:14px">Signed in as <strong style="color:var(--text)">${esc(state.user.displayName)}</strong> (@${esc(state.user.username)})</div>
       <h3 style="font-size:15px;margin-top:18px">Change password</h3>
@@ -341,7 +344,7 @@ function viewWelcome() {
   appEl.innerHTML = `
   <div class="auth-wrap">
     <div class="auth-card">
-      <div class="auth-logo">🎲</div>
+      <div class="auth-logo">${icon('dice', 'accent')}</div>
       <h1>Meeple Shelf</h1>
       <p class="auth-tag">Your board game shelf, your friends' shelves,<br>and one combined library for game night.</p>
       <div class="tabs">
@@ -381,7 +384,7 @@ function viewWelcome() {
       if (mode === 'signup') body.displayName = $('#a-display').value;
       const { user } = await api(mode === 'signup' ? '/signup' : '/login', { method: 'POST', body });
       state.user = user;
-      if (mode === 'signup') toast('Welcome to Meeple Shelf 🎲');
+      if (mode === 'signup') toast('Welcome to Meeple Shelf!');
       location.hash = '#/library';
     } catch (err) {
       $('#a-error').textContent = err.message;
@@ -408,7 +411,7 @@ async function viewLibrary() {
     </div>
 
     <div class="share-bar ${state.user.libraryPublic ? '' : 'is-private'}">
-      <span class="share-label">🔗 Share your shelf</span>
+      <span class="share-label">${icon('link')} Share your shelf</span>
       <span class="share-link" id="share-link">${esc(shareUrl)}</span>
       <button class="btn btn-sm" id="copy-share">Copy link</button>
       <span class="share-spacer"></span>
@@ -432,7 +435,7 @@ async function viewLibrary() {
         </select>
       </div>
     </div>
-    <div id="lib-grid"></div>` : emptyState('🎲', 'Your shelf is empty', 'Add the games you own — then share your shelf or pool it with friends in a crew.', '<button class="btn btn-primary" id="empty-add-btn">+ Add your first game</button>')}
+    <div id="lib-grid"></div>` : emptyState('dice', 'Your shelf is empty', 'Add the games you own — then share your shelf or pool it with friends in a crew.', '<button class="btn btn-primary" id="empty-add-btn">+ Add your first game</button>')}
   </div>`;
 
   const byId = new Map(entries.map((en) => [String(en.id), en]));
@@ -456,7 +459,7 @@ async function viewLibrary() {
     }
     grid.innerHTML = list.length
       ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, gameId: en.game.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo, dueDate: en.dueDate })).join('')}</div>`
-      : emptyState('🔍', 'No matches', 'No games on your shelf match that search.');
+      : emptyState('search', 'No matches', 'No games on your shelf match that search.');
   }
   renderGrid();
 
@@ -506,7 +509,7 @@ async function openAddModal(ownersCtx = null) {
   const selectedOwners = new Set([state.user.id]);
 
   openModal(`
-    <div class="modal-head"><h2>Add a game</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>Add a game</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div class="tabs">
         <button class="tab active" data-tab="search">Search</button>
@@ -724,7 +727,7 @@ async function openEditModal(entry) {
     /* not in any crew yet */
   }
   openModal(`
-    <div class="modal-head"><h2>${esc(g.title)}</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>${esc(g.title)}</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div class="two-col">
         <div><label>Year</label><input type="number" id="e-year" value="${g.year ?? ''}"></div>
@@ -841,7 +844,7 @@ async function viewCrews() {
         <div class="tile-sub">${c.memberCount} member${c.memberCount === 1 ? '' : 's'} · ${c.gameCount} game${c.gameCount === 1 ? '' : 's'} combined</div>
         <div style="margin-top:10px"><span class="code-chip">${esc(c.inviteCode)}</span></div>
       </a>`).join('')}</div>`
-      : emptyState('👥', 'No crews yet', 'Create a crew and send the invite code to your game group — or join one with a code a friend sent you.')}
+      : emptyState('users', 'No crews yet', 'Create a crew and send the invite code to your game group — or join one with a code a friend sent you.')}
   </div>`;
 
   $('#create-form').onsubmit = async (e) => {
@@ -852,7 +855,7 @@ async function viewCrews() {
       const { crew } = await api('/crews', { method: 'POST', body: { name } });
       modalDirty = true;
       openModal(`
-        <div class="modal-head"><h2>${esc(crew.name)} is ready 🎉</h2><button class="modal-close">×</button></div>
+        <div class="modal-head"><h2>${esc(crew.name)} is ready!</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
         <div class="modal-body">
           <p style="color:var(--muted)">Send this invite code to your friends. When they join, everyone's shelves pool into one combined library.</p>
           <div class="big-code">${esc(crew.inviteCode)}</div>
@@ -873,7 +876,7 @@ async function viewCrews() {
     if (!code) return;
     try {
       const { crew, alreadyMember } = await api('/crews/join', { method: 'POST', body: { code } });
-      toast(alreadyMember ? `You're already in ${crew.name}` : `Welcome to ${crew.name}! 🎲`);
+      toast(alreadyMember ? `You're already in ${crew.name}` : `Welcome to ${crew.name}!`);
       location.hash = `#/crew/${crew.id}`;
     } catch (err) {
       toast(err.message);
@@ -902,7 +905,7 @@ async function viewCrewDetail(id) {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-primary" id="crew-add-btn">+ Add<span class="seg-txt"> a game</span></button>
-        <button class="btn" id="crew-menu-btn" title="Crew menu">☰ Menu</button>
+        <button class="btn" id="crew-menu-btn" title="Crew menu">${icon('menu')} Menu</button>
       </div>
     </div>
 
@@ -922,11 +925,11 @@ async function viewCrewDetail(id) {
       <input type="text" class="search" id="cw-q" placeholder="Search games…" value="${esc(crewState.q)}">
       <button class="chip-btn" id="cw-filtertoggle"></button>
       <span class="nav-spacer"></span>
-      <button class="btn" id="surprise-btn">🎲<span class="seg-txt"> Surprise me</span></button>
+      <button class="btn" id="surprise-btn">${icon('dice')}<span class="seg-txt"> Surprise me</span></button>
       <div class="segmented">
         <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
         <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
-        <button data-view="stats" class="${crewState.view === 'stats' ? 'active' : ''}">🏆<span class="seg-txt"> Leaderboard</span></button>
+        <button data-view="stats" class="${crewState.view === 'stats' ? 'active' : ''}">${icon('trophy')}<span class="seg-txt"> Leaderboard</span></button>
       </div>
     </div>
 
@@ -961,7 +964,7 @@ async function viewCrewDetail(id) {
       </div>` : ''}
       <div class="filter-group">
         <span class="glabel">Show</span>
-        <button class="chip-btn ${crewState.neverPlayed ? 'active' : ''}" id="cw-never">🕸️ Never played</button>
+        <button class="chip-btn ${crewState.neverPlayed ? 'active' : ''}" id="cw-never">${icon('ghost')} Never played</button>
       </div>
       <div class="filter-group">
         <span class="glabel">Sort</span>
@@ -1074,7 +1077,7 @@ async function viewCrewDetail(id) {
     const list = filtered();
     $('#cw-count').textContent = `${list.length} of ${games.length} games`;
     if (!list.length) {
-      container.innerHTML = emptyState('🫥', 'No games match', 'Try loosening the filters — or get someone to buy more games.');
+      container.innerHTML = emptyState('ghost', 'No games match', 'Try loosening the filters — or get someone to buy more games.');
       return;
     }
     if (crewState.view === 'grid') {
@@ -1112,7 +1115,7 @@ async function viewCrewDetail(id) {
               const o = g.owners.find((x) => x.id === m.id);
               if (!o) return '<td></td>';
               const overdue = o.dueDate && o.dueDate < localISODate();
-              return `<td><span class="check" style="color:${memberColor(m.id)}">✓</span>${o.loanedTo ? `<span class="m-loan${overdue ? ' overdue' : ''}" title="with ${esc(o.loanedTo.displayName)}${o.dueDate ? ' · due ' + fmtDay(o.dueDate) : ''}">→${esc(o.loanedTo.displayName.slice(0, 2).toUpperCase())}${overdue ? '⏰' : ''}</span>` : ''}</td>`;
+              return `<td><span class="check" style="color:${memberColor(m.id)}">✓</span>${o.loanedTo ? `<span class="m-loan${overdue ? ' overdue' : ''}" title="with ${esc(o.loanedTo.displayName)}${o.dueDate ? ' · due ' + fmtDay(o.dueDate) : ''}">→${esc(o.loanedTo.displayName.slice(0, 2).toUpperCase())}${overdue ? icon('alarm') : ''}</span>` : ''}</td>`;
             }).join('')}
           </tr>`;
           }).join('')}
@@ -1184,29 +1187,29 @@ async function viewCrewDetail(id) {
     try {
       [{ plays }, stats] = await Promise.all([api(`/crews/${id}/plays`), api(`/crews/${id}/stats`)]);
     } catch (e) {
-      container.innerHTML = emptyState('⚠️', 'Hmm', esc(e.message));
+      container.innerHTML = emptyState('alert', 'Hmm', esc(e.message));
       return;
     }
     if (crewState.view !== 'stats') return; // user switched away while loading
 
-    const medals = ['🥇', '🥈', '🥉'];
-    const tierChip = (t) => (t ? `<span class="badge milestone">🎖 ${t === 'quarter' ? '25+' : t === 'dime' ? '10+' : '5+'}</span>` : '');
+    const medalIcon = (i) => icon('award', ['gold', 'silver', 'bronze'][i]);
+    const tierChip = (t) => (t ? `<span class="badge milestone">${icon('award')} ${t === 'quarter' ? '25+' : t === 'dime' ? '10+' : '5+'}</span>` : '');
     container.innerHTML = `
       <div class="stats-head">
         <div class="stats-blurb">${stats.totalPlays} play${stats.totalPlays === 1 ? '' : 's'} · ${stats.distinctGames || 0} game${stats.distinctGames === 1 ? '' : 's'} · crew H-index <strong>${stats.hIndex || 0}</strong></div>
-        <button class="btn btn-primary" id="log-play-btn">📝 Log a play</button>
+        <button class="btn btn-primary" id="log-play-btn">${icon('clipboard')} Log a play</button>
       </div>
 
-      ${stats.totalPlays === 0 ? emptyState('🎲', 'No plays yet', 'Log your first game and the standings begin. Every rivalry starts somewhere.') : `
+      ${stats.totalPlays === 0 ? emptyState('dice', 'No plays yet', 'Log your first game and the standings begin. Every rivalry starts somewhere.') : `
       <div class="stats-section">
         <h3>Standings</h3>
         <div class="matrix-wrap"><table class="matrix">
-          <thead><tr><th style="text-align:left">Household</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="H-index">H</th><th title="Plays hosted">🏠</th></tr></thead>
+          <thead><tr><th style="text-align:left">Household</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="H-index">H</th><th title="Plays hosted">${icon('home')}</th></tr></thead>
           <tbody>
             ${stats.standings.map((s, i) => `<tr>
               <td>
-                <span class="medal">${s.wins > 0 && i < 3 ? medals[i] : ''}</span> <span class="avatar" style="--c:${memberColor(s.id)};background:${memberColor(s.id)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle">${esc(s.displayName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.displayName)}</span>
-                ${s.nemesis ? `<div class="nemesis-line">⚔️ nemesis: ${esc(s.nemesis.displayName)} (${s.nemesis.losses})</div>` : ''}
+                <span class="medal">${s.wins > 0 && i < 3 ? medalIcon(i) : ''}</span> <span class="avatar" style="--c:${memberColor(s.id)};background:${memberColor(s.id)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle">${esc(s.displayName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.displayName)}</span>
+                ${s.nemesis ? `<div class="nemesis-line">${icon('swords')} nemesis: ${esc(s.nemesis.displayName)} (${s.nemesis.losses})</div>` : ''}
               </td>
               <td>${s.plays}</td>
               <td>${s.wins}</td>
@@ -1232,7 +1235,7 @@ async function viewCrewDetail(id) {
             ${r.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(r.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
               <div class="r-title">${esc(r.title)}</div>
-              <div class="r-meta">🏆 ${r.best.score}${r.scoreDir === 'low' ? ' (low wins)' : ''} — ${esc(r.best.displayName)}, ${fmtDay(r.best.playedAt)} · avg ${r.avg} · ${r.scoredPlays} scored</div>
+              <div class="r-meta">${icon('trophy')} ${r.best.score}${r.scoreDir === 'low' ? ' (low wins)' : ''} — ${esc(r.best.displayName)}, ${fmtDay(r.best.playedAt)} · avg ${r.avg} · ${r.scoredPlays} scored</div>
             </div>
           </div>`).join('')}
         </div>
@@ -1247,7 +1250,7 @@ async function viewCrewDetail(id) {
             ${m.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(m.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
               <div class="r-title">${esc(m.title)}</div>
-              <div class="r-meta">${m.plays} plays${m.champion ? ` · 👑 ${esc(m.champion.displayName)} (${m.champion.wins})` : ''}</div>
+              <div class="r-meta">${m.plays} plays${m.champion ? ` · ${icon('crown')} ${esc(m.champion.displayName)} (${m.champion.wins})` : ''}</div>
             </div>
             ${tierChip(m.tier)}
           </div>`).join('')}
@@ -1262,7 +1265,7 @@ async function viewCrewDetail(id) {
             ${g.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
               <div class="r-title">${esc(g.title)}</div>
-              ${g.champion ? `<div class="r-meta">👑 ${esc(g.champion.displayName)} (${g.champion.wins} win${g.champion.wins === 1 ? '' : 's'})</div>` : ''}
+              ${g.champion ? `<div class="r-meta">${icon('crown')} ${esc(g.champion.displayName)} (${g.champion.wins} win${g.champion.wins === 1 ? '' : 's'})</div>` : ''}
             </div>
             ${tierChip(g.badge)}
             <span class="badge">${g.plays} play${g.plays === 1 ? '' : 's'}</span>
@@ -1277,11 +1280,11 @@ async function viewCrewDetail(id) {
           <div class="result-row" data-play="${p.id}">
             ${p.game.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(p.game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
-              <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}${p.host ? ` · 🏠 ${esc(p.host.displayName)}` : ''}</span></div>
-              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? '👑 ' : ''}${esc(pl.displayName)}${pl.score != null ? ` · ${pl.score}` : ''}</span>`).join('')}</div>
+              <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}${p.host ? ` · ${icon('home')} ${esc(p.host.displayName)}` : ''}</span></div>
+              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? icon('crown') + ' ' : ''}${esc(pl.displayName)}${pl.score != null ? ` · ${pl.score}` : ''}</span>`).join('')}</div>
               ${p.notes ? `<div class="card-notes">${esc(p.notes)}</div>` : ''}
             </div>
-            <button class="icon-btn danger" data-del-play="${p.id}" title="Delete this play">✕</button>
+            <button class="icon-btn danger" data-del-play="${p.id}" title="Delete this play">${icon('x')}</button>
           </div>`).join('')}
         </div>
       </div>`}
@@ -1309,7 +1312,7 @@ async function viewCrewDetail(id) {
     const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     openModal(`
-      <div class="modal-head"><h2>Log a play</h2><button class="modal-close">×</button></div>
+      <div class="modal-head"><h2>Log a play</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
       <div class="modal-body">
         <label>Game</label>
         <div id="lp-game-area"></div>
@@ -1317,11 +1320,11 @@ async function viewCrewDetail(id) {
         <input type="date" id="lp-date" value="${localDate}" max="${localDate}">
         <label>Hosted at <span style="font-weight:400">(optional)</span></label>
         <div class="owner-pick" id="lp-host" style="margin-bottom:2px">
-          ${members.map((m) => `<button class="chip-btn" data-host="${m.id}">🏠 ${esc(m.displayName)}</button>`).join('')}
+          ${members.map((m) => `<button class="chip-btn" data-host="${m.id}">${icon('home')} ${esc(m.displayName)}</button>`).join('')}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
-          <label style="margin-top:14px">Who played? <span style="font-weight:400">(tap 👑 for winners)</span></label>
-          <button class="chip-btn" id="lp-scores-toggle" style="margin-left:auto">🔢 Scores</button>
+          <label style="margin-top:14px">Who played? <span style="font-weight:400">(crown the winners)</span></label>
+          <button class="chip-btn" id="lp-scores-toggle" style="margin-left:auto">${icon('hash')} Scores</button>
         </div>
         <div id="lp-players">
           ${members.map((m) => `
@@ -1332,7 +1335,7 @@ async function viewCrewDetail(id) {
               <span class="m-name">${esc(m.displayName)}</span>
             </label>
             <input type="number" class="lp-score" data-score="${m.id}" step="1" placeholder="pts" aria-label="${esc(m.displayName)} score">
-            <button class="chip-btn lp-won" data-won="${m.id}" disabled>👑<span class="lp-won-txt"> Won</span></button>
+            <button class="chip-btn lp-won" data-won="${m.id}" disabled>${icon('crown')}<span class="lp-won-txt"> Won</span></button>
           </div>`).join('')}
         </div>
         <label>Notes <span style="font-weight:400">(optional)</span></label>
@@ -1467,10 +1470,10 @@ async function viewCrewDetail(id) {
           body: { gameId: selectedGame.id, playedAt: $('#lp-date').value, players, notes: $('#lp-notes').value, hostId: hostChip ? Number(hostChip.dataset.host) : null },
         });
         const winners = players.filter((p) => p.won);
-        toast(winners.length ? `🏆 Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => members.find((m) => m.id === w.id)?.displayName).join(', ')}` : `Logged ${selectedGame.title}`);
+        toast(winners.length ? `Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => members.find((m) => m.id === w.id)?.displayName).join(', ')}` : `Logged ${selectedGame.title}`);
         if (milestone) {
           const n = milestone === 'quarter' ? 25 : milestone === 'dime' ? 10 : 5;
-          setTimeout(() => toast(`🎖 ${selectedGame.title} just hit ${n} crew plays!`), 1200);
+          setTimeout(() => toast(`Milestone: ${selectedGame.title} just hit ${n} crew plays!`), 1200);
         }
         crewState.view = 'stats';
         modalDirty = true;
@@ -1485,13 +1488,13 @@ async function viewCrewDetail(id) {
   function surpriseHtml(g, final) {
     return `
       <div class="surprise-banner">
-        <div class="sb-cover">${g.imageUrl ? `<img src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : '🎲'}</div>
+        <div class="sb-cover">${g.imageUrl ? `<img src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : icon('dice')}</div>
         <div class="sb-body">
           <div class="sb-label">${final ? "Tonight you're playing" : 'Rolling…'}</div>
           <div class="sb-title">${esc(g.title)}</div>
           ${final ? `<div class="sb-meta">${[fmtPlayers(g), fmtTime(g)].filter(Boolean).join(' · ')}${g.owners?.length ? ` · owned by ${esc(g.owners.map((o) => o.displayName).join(', '))}` : ''}</div>` : ''}
         </div>
-        ${final ? `<div class="sb-actions"><button class="btn btn-sm btn-primary" id="sb-played">📝 We played it</button><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">✕</button></div>` : ''}
+        ${final ? `<div class="sb-actions"><button class="btn btn-sm btn-primary" id="sb-played">${icon('clipboard')} We played it</button><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">${icon('x')}</button></div>` : ''}
       </div>`;
   }
   let lastRoll = null;
@@ -1579,10 +1582,10 @@ async function viewCrewDetail(id) {
 
   $('#crew-menu-btn').onclick = () => {
     openModal(`
-      <div class="modal-head"><h2>${esc(crew.name)}</h2><button class="modal-close">×</button></div>
+      <div class="modal-head"><h2>${esc(crew.name)}</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
       <div class="modal-body">
-        <button class="btn btn-primary" id="menu-log" style="width:100%;justify-content:center">📝 Log a play</button>
-        <a class="btn" href="https://justinleedoyle.github.io/meeple-shelf/" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin-top:10px">🌐 Public page ↗</a>
+        <button class="btn btn-primary" id="menu-log" style="width:100%;justify-content:center">${icon('clipboard')} Log a play</button>
+        <a class="btn" href="https://justinleedoyle.github.io/meeple-shelf/" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin-top:10px">${icon('globe')} Public page ${icon('external')}</a>
         <h3 style="font-size:12.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 8px">Invite code — friends join with this</h3>
         <div class="big-code" style="margin-top:0">${esc(crew.inviteCode)}</div>
         <button class="btn" id="copy-code" style="width:100%;justify-content:center">Copy code</button>
@@ -1605,7 +1608,7 @@ async function viewCrewDetail(id) {
 async function openGameModal(gameId, extras = {}) {
   // open instantly with a skeleton; fill when the data lands
   openModal(`
-    <div class="modal-head"><h2>&nbsp;</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>&nbsp;</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div class="gd-top"><div class="skel" style="width:124px;height:124px;flex:none"></div>
       <div style="flex:1"><div class="skel skel-line" style="width:70%"></div><div class="skel skel-line" style="width:45%"></div></div></div>
@@ -1628,7 +1631,7 @@ async function openGameModal(gameId, extras = {}) {
   const daysOut = (outAt) => Math.max(0, Math.floor((Date.now() - Date.parse(outAt.replace(' ', 'T') + 'Z')) / 86400000));
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   openModal(`
-    <div class="modal-head"><h2>${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div class="gd-top">
         <div class="gd-cover" style="background:linear-gradient(135deg, ${grad[0]}, ${grad[1]})">
@@ -1647,7 +1650,7 @@ async function openGameModal(gameId, extras = {}) {
       <div class="gd-stats">
         <div class="gd-tile"><div class="gd-num">${gstats.plays}</div><div class="gd-lbl">play${gstats.plays === 1 ? '' : 's'}</div></div>
         ${gstats.lastPlayedAt ? `<div class="gd-tile"><div class="gd-num">${fmtDay(gstats.lastPlayedAt)}</div><div class="gd-lbl">last played</div></div>` : ''}
-        ${gstats.champion ? `<div class="gd-tile"><div class="gd-num">👑 ${esc(gstats.champion.displayName)}</div><div class="gd-lbl">champion · ${gstats.champion.wins} win${gstats.champion.wins === 1 ? '' : 's'}</div></div>` : ''}
+        ${gstats.champion ? `<div class="gd-tile"><div class="gd-num">${icon('crown')} ${esc(gstats.champion.displayName)}</div><div class="gd-lbl">champion · ${gstats.champion.wins} win${gstats.champion.wins === 1 ? '' : 's'}</div></div>` : ''}
         ${gstats.bestScore ? `<div class="gd-tile"><div class="gd-num">${gstats.bestScore.score}${game.scoreDir === 'low' ? ' ↓' : ''}</div><div class="gd-lbl">record — ${esc(gstats.bestScore.displayName)}</div></div>` : ''}
       </div>
       ${gstats.record?.length ? `<div class="card-owners" style="margin:2px 0 8px">${gstats.record.map((r) => `<span class="owner-chip" style="--c:${memberColor(r.id)}">${esc(r.displayName)} ${r.wins}W · ${r.plays}P</span>`).join('')}</div>` : ''}` : ''}
@@ -1659,8 +1662,8 @@ async function openGameModal(gameId, extras = {}) {
         ${loanData.loans.slice(0, 3).map((l) => `<div class="r-meta">• ${esc(l.borrowerName)} ← ${esc(l.ownerName)}, ${fmtDate(l.outAt)}${l.returnedAt ? ` → returned ${fmtDate(l.returnedAt)}` : ' (still out)'}</div>`).join('')}
       </div>` : ''}
       <div class="gd-links">
-        ${game.websiteUrl ? `<a class="btn" href="${esc(game.websiteUrl)}" target="_blank" rel="noopener">Official site ↗</a>` : ''}
-        ${game.bggId ? `<a class="btn" href="https://boardgamegeek.com/boardgame/${game.bggId}" target="_blank" rel="noopener">BoardGameGeek ↗</a>` : ''}
+        ${game.websiteUrl ? `<a class="btn" href="${esc(game.websiteUrl)}" target="_blank" rel="noopener">Official site ${icon('external')}</a>` : ''}
+        ${game.bggId ? `<a class="btn" href="https://boardgamegeek.com/boardgame/${game.bggId}" target="_blank" rel="noopener">BoardGameGeek ${icon('external')}</a>` : ''}
       </div>
     </div>`);
 }
@@ -1693,7 +1696,7 @@ function clickedControl(e) {
 // Set exactly who in the crew owns a game — mirrors editing a row of the old spreadsheet.
 function openOwnersModal(crew, game, members) {
   openModal(`
-    <div class="modal-head"><h2>Who owns ${esc(game.title)}?</h2><button class="modal-close">×</button></div>
+    <div class="modal-head"><h2>Who owns ${esc(game.title)}?</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div id="owner-rows">
         ${members.map((m) => {
@@ -1711,7 +1714,7 @@ function openOwnersModal(crew, game, members) {
             ${cur && !members.some((x) => x.id === cur) ? `<option value="${cur}" selected>with ${esc(owner.loanedTo.displayName)} (other crew)</option>` : ''}
             ${members.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${cur === x.id ? 'selected' : ''}>with ${esc(x.displayName)}</option>`).join('')}
           </select>
-          <label class="due-wrap" data-due-for="${m.id}" style="${cur ? '' : 'display:none'}">⏰ Due back
+          <label class="due-wrap" data-due-for="${m.id}" style="${cur ? '' : 'display:none'}">${icon('alarm')} Due back
             <input type="date" class="due" data-owner-due="${m.id}" value="${esc(owner?.dueDate || '')}">
           </label>
         </div>`;
@@ -1761,16 +1764,16 @@ async function viewPublicShelf(slug) {
   const isMine = state.user && state.user.shareSlug === slug;
   appEl.innerHTML = `
   <div class="container">
-    ${isMine ? `<div class="public-banner">👀 This is your public shelf, exactly as others see it.</div>` : ''}
+    ${isMine ? `<div class="public-banner">${icon('eye')} This is your public shelf, exactly as others see it.</div>` : ''}
     <div class="page-head">
       <div>
-        <h1>🎲 ${esc(owner.displayName)}'s Shelf</h1>
+        <h1>${icon('dice', 'accent')} ${esc(owner.displayName)}'s Shelf</h1>
         <div class="sub">${entries.length} game${entries.length === 1 ? '' : 's'}</div>
       </div>
     </div>
     ${entries.length
       ? `<div class="grid" id="pub-grid">${entries.map((en) => gameCardHtml(en.game, { gameId: en.game.id, notes: en.notes })).join('')}</div>`
-      : emptyState('🎲', 'Nothing here yet', `${esc(owner.displayName)} hasn't added any games.`)}
+      : emptyState('dice', 'Nothing here yet', `${esc(owner.displayName)} hasn't added any games.`)}
     <div class="public-footer">
       Shared with <strong>Meeple Shelf</strong> — your board game shelf, your friends' shelves, one combined library.
       ${state.user ? `<a href="#/library">Back to my shelf</a>` : `<a href="#/welcome">Make your own →</a>`}

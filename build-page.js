@@ -44,6 +44,7 @@ ${css}
 const DATA = ${dataJson};
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const icon = (name, cls = '') => \`<svg class="icon\${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="./icons.svg#i-\${name}"/></svg>\`;
 const hashStr = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return Math.abs(h); };
 const MEMBER_COLORS = ['#e8a33d', '#7fb069', '#5fa8d3', '#c98bdb', '#e07a5f', '#64b6ac', '#d6c25a', '#9aa0d6'];
 const memberColor = (id) => MEMBER_COLORS[id % MEMBER_COLORS.length];
@@ -52,15 +53,15 @@ const COVER_GRADS = [['#5a4632','#8a6a3f'],['#3f5a46','#5f8a62'],['#374f63','#5b
 function fmtPlayers(g) {
   if (g.minPlayers == null && g.maxPlayers == null) return null;
   const min = g.minPlayers ?? g.maxPlayers, max = g.maxPlayers ?? g.minPlayers;
-  if (max >= 20) return '👥 ' + min + '+';
-  return '👥 ' + (min === max ? min : min + '–' + max);
+  if (max >= 20) return icon('users') + ' ' + min + '+';
+  return icon('users') + ' ' + (min === max ? min : min + '–' + max);
 }
 function fmtTime(g) {
   const t = g.playTime;
   if (!t) return null;
-  if (t < 90) return '⏱ ' + t + ' min';
+  if (t < 90) return icon('clock') + ' ' + t + ' min';
   const h = t / 60;
-  return '⏱ ' + (Number.isInteger(h) ? h : h.toFixed(1)) + ' hr';
+  return icon('clock') + ' ' + (Number.isInteger(h) ? h : h.toFixed(1)) + ' hr';
 }
 function expShortTitle(g) {
   const sep = g.title.indexOf(' — ');
@@ -95,7 +96,7 @@ document.getElementById('app').innerHTML = \`
 <div class="container">
   <div class="page-head">
     <div>
-      <h1>🎲 \${esc(DATA.crewName)}</h1>
+      <h1>\${icon('dice', 'accent')} \${esc(DATA.crewName)}</h1>
       <div class="sub">The combined board game library · <span class="snapshot-note">read-only snapshot, updated \${DATA.generated}</span></div>
     </div>
   </div>
@@ -120,8 +121,8 @@ document.getElementById('app').innerHTML = \`
     </div>
     \${categories.length ? \`<div class="filter-group"><span class="glabel">Category</span><select id="f-category"><option value="all">All</option>\${categories.map((c) => \`<option value="\${esc(c)}">\${esc(c)}</option>\`).join('')}</select></div>\` : ''}
     <span class="nav-spacer"></span>
-    <button class="chip-btn" id="f-packed" title="Show only games marked as packed">🎒 Packed (<span id="packed-n">0</span>)</button>
-    <button class="btn" id="surprise-btn">🎲 Surprise me</button>
+    <button class="chip-btn" id="f-packed" title="Show only games marked as packed">\${icon('backpack')} Packed (<span id="packed-n">0</span>)</button>
+    <button class="btn" id="surprise-btn">\${icon('dice')} Surprise me</button>
     <div class="segmented">
       <button data-view="grid" class="active">Grid</button>
       <button data-view="matrix">Who has what</button>
@@ -130,7 +131,7 @@ document.getElementById('app').innerHTML = \`
   <div id="surprise-result" style="display:none"></div>
   <div class="result-count" id="f-count"></div>
   <div id="games"></div>
-  <div class="public-footer">Built with <strong>Meeple Shelf</strong> 🎲</div>
+  <div class="public-footer">Built with <strong>Meeple Shelf</strong> \${icon('dice')}</div>
 </div>\`;
 
 function filtered() {
@@ -167,10 +168,10 @@ function card(g, expansions, expanded) {
   const players = fmtPlayers(g), time = fmtTime(g);
   return \`<div class="game-card" data-game="\${g.id}">
     <div class="cover" style="background:linear-gradient(135deg, \${grad[0]}, \${grad[1]})">
-      <span class="cover-letter">\${esc(g.title[0].toUpperCase())}</span><span class="cover-die">🎲</span>
+      <span class="cover-letter">\${esc(g.title[0].toUpperCase())}</span><span class="cover-die">\${icon('dice')}</span>
       \${g.imageUrl ? \`<img loading="lazy" src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : ''}
     </div>
-    <button class="pack-btn\${packed.has(g.id) ? ' on' : ''}" data-pack="\${g.id}" title="Toggle packed">🎒</button>
+    <button class="pack-btn\${packed.has(g.id) ? ' on' : ''}" data-pack="\${g.id}" title="Toggle packed">\${icon('backpack')}</button>
     <div class="card-body">
       <div class="card-title">\${esc(g.title)}\${g.year ? \` <span style="color:var(--faint);font-weight:400">(\${g.year})</span>\` : ''}</div>
       <div class="card-meta">\${players ? \`<span class="badge">\${players}</span>\` : ''}\${time ? \`<span class="badge">\${time}</span>\` : ''}\${g.category ? \`<span class="badge">\${esc(g.category)}</span>\` : ''}</div>
@@ -186,7 +187,7 @@ function render() {
   document.querySelectorAll('#members-scroll .member').forEach((c) => c.classList.toggle('active', String(state.owner) === c.dataset.member));
   const el = document.getElementById('games');
   if (!list.length) {
-    el.innerHTML = '<div class="empty"><div class="e-emoji">🫥</div><h2>No games match</h2><p>Try loosening the filters.</p></div>';
+    el.innerHTML = '<div class="empty"><div class="e-emoji">' + icon('ghost') + '</div><h2>No games match</h2><p>Try loosening the filters.</p></div>';
     return;
   }
   if (state.view === 'grid') {
@@ -243,7 +244,7 @@ function openDetail(g) {
   root.className = 'modal-backdrop';
   root.innerHTML = \`
     <div class="modal">
-      <div class="modal-head"><h2>\${esc(g.title)}\${g.year ? \` <span style="color:var(--faint);font-weight:400">(\${g.year})</span>\` : ''}</h2><button class="modal-close">×</button></div>
+      <div class="modal-head"><h2>\${esc(g.title)}\${g.year ? \` <span style="color:var(--faint);font-weight:400">(\${g.year})</span>\` : ''}</h2><button class="modal-close" aria-label="Close">\${icon('x')}</button></div>
       <div class="modal-body">
         <div class="gd-top">
           <div class="gd-cover" style="background:linear-gradient(135deg, \${grad[0]}, \${grad[1]})">
@@ -260,8 +261,8 @@ function openDetail(g) {
         </div>
         <p class="gd-desc">\${g.description ? esc(g.description) : '<em>No description available.</em>'}</p>
         <div class="gd-links">
-          \${g.websiteUrl ? \`<a class="btn" href="\${esc(g.websiteUrl)}" target="_blank" rel="noopener">Official site ↗</a>\` : ''}
-          \${g.bggId ? \`<a class="btn" href="https://boardgamegeek.com/boardgame/\${g.bggId}" target="_blank" rel="noopener">BoardGameGeek ↗</a>\` : ''}
+          \${g.websiteUrl ? \`<a class="btn" href="\${esc(g.websiteUrl)}" target="_blank" rel="noopener">Official site \${icon('external')}</a>\` : ''}
+          \${g.bggId ? \`<a class="btn" href="https://boardgamegeek.com/boardgame/\${g.bggId}" target="_blank" rel="noopener">BoardGameGeek \${icon('external')}</a>\` : ''}
         </div>
       </div>
     </div>\`;
@@ -302,13 +303,13 @@ savePacked();
 // ---- game night picker: current filters + dice ----
 function surpriseHtml(g, final) {
   return \`<div class="surprise-banner">
-    <div class="sb-cover">\${g.imageUrl ? \`<img src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : '🎲'}</div>
+    <div class="sb-cover">\${g.imageUrl ? \`<img src="\${esc(g.imageUrl)}" alt="" onerror="this.remove()">\` : icon('dice')}</div>
     <div class="sb-body">
       <div class="sb-label">\${final ? "Tonight you're playing" : 'Rolling…'}</div>
       <div class="sb-title">\${esc(g.title)}</div>
       \${final ? \`<div class="sb-meta">\${[fmtPlayers(g), fmtTime(g)].filter(Boolean).join(' · ')}\${g.owners?.length ? ' · owned by ' + esc(g.owners.map((o) => o.displayName).join(', ')) : ''}</div>\` : ''}
     </div>
-    \${final ? '<div class="sb-actions"><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">✕</button></div>' : ''}
+    \${final ? \`<div class="sb-actions"><button class="btn btn-sm" id="sb-again">Roll again</button><button class="icon-btn" id="sb-close" title="Dismiss">\${icon('x')}</button></div>\` : ''}
   </div>\`;
 }
 function rollSurprise() {
@@ -396,7 +397,7 @@ mkdirSync(siteDir, { recursive: true });
 writeFileSync(path.join(siteDir, 'index.html'), html);
 writeFileSync(path.join(siteDir, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2));
 writeFileSync(path.join(siteDir, 'sw.js'), sw);
-for (const f of ['icon.svg', 'icon-180.png', 'icon-512.png']) {
+for (const f of ['icon.svg', 'icon-180.png', 'icon-512.png', 'icons.svg']) {
   const src = path.join(__dirname, 'public', f);
   if (existsSync(src)) copyFileSync(src, path.join(siteDir, f));
 }
