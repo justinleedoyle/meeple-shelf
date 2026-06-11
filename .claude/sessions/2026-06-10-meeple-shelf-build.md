@@ -255,3 +255,55 @@ Nothing — feature-complete as scoped.
 - Verified on mobile preview (375x812): crew grid, leaderboard, log-play modal,
   game detail; sprite fetch OK, 8+ icons per view, zero emoji left. Deployed to
   Fly (machine v15); live checks: /icons.svg 24 symbols, app.js icon refs OK.
+
+## Phase 17: BACKLOG PACK — nights, requests, wishlists, reset, tags, feed, backups. DEPLOYED
+- Scope: every non-BGG-token backlog item. Deferred: barcode scan (needs a UPC
+  data source), Crew Wrapped (needs a year of plays — December), individual
+  players (architecture change).
+- Schema: events/event_rsvps/event_votes, borrow_requests, reset_codes,
+  game_tags, library_entries.status ('owned'|'wish'|'grabs').
+- Game nights: 4th "Nights" segment (calendar icon, swipe order grid→matrix→
+  nights→stats). Date-block cards, RSVP in/maybe/out (upsert, avatars), vote
+  toggles + suggest-a-game from crew shelf (server rejects wish/foreign games),
+  planner-or-host edit + call-off, creator auto-RSVPs. eventsCache per crew
+  view; wired-once delegation guard (re-render must not stack listeners).
+- Borrow requests: ask per lendable owner on the game card; account inbox
+  approve (one-tap loan + due date via logLoanChange txn) / decline; rival
+  pendings auto-decline on approve; requester cancel; /api/me carries
+  pendingRequests → tab badge (refreshPending()).
+- Wishlists: add-modal Shelf|Wishlist toggle, status select in edit modal
+  (loan controls hidden for wish; wish+return-in-same-save allowed), My Shelf
+  wishlist section + got-it action, public shelf wishlist section, crew Gift
+  ideas modal (/crews/:id/wishlists). Crew library/matrix/snapshot/gameCounts
+  all exclude wish; owners PUT can't delete wish rows and upgrades them when
+  an owner is checked; re-adding a wish as owned upgrades it. grabs = badge
+  on cards (own shelf, crew grid, public).
+- Password reset: crewmate-vouched one-time codes (XXXX-XXXX, scrypt-hashed,
+  1h expiry, newest-only, generator in Account modal incl. target username);
+  /api/reset-password rate-limited, kills all sessions, auto-login; login-card
+  Forgot password? mode (required attr dropped from hidden pw input).
+- Tags: per-crew game_tags, normalize lowercase 2-24 chars, 8/game cap; chips
+  in filter bar (toggle), editor in game detail (Enter + datalist change,
+  works pre-keyboard on mobile); member-only.
+- Activity feed: single UNION query (adds, wishes, loans, returns w/ borrower,
+  plays via created_at, planned nights) LIMIT 40, member-only; act-rows with
+  per-kind icons + timeAgo(). First-player picker: member chips + guests,
+  ease-out roulette (~3s; bg tabs throttle to 1s ticks — foreground fine).
+- Infra: nightly.yml (02:17 PT + dispatch) — wake machine (dynamic id, retry),
+  backup-prep.js WAL checkpoint, sftp db + snapshot, openssl aes-256-cbc
+  (pbkdf2 200k) artifact 30d retention, snapshot commit ONLY on real change
+  (generated-line-insensitive diff), explicit publish-pages dispatch (bot
+  pushes don't trigger on:push). Scoped deploy token tested locally (machine
+  start + ssh) before set; secrets FLY_API_TOKEN + BACKUP_PASSPHRASE; local
+  .backup-passphrase gitignored; BACKUPS.md restore drill.
+- Icons: +7 symbols (calendar gift key bell tag activity check) → 31.
+- Fixed during preview verification: RSVP/vote active chips were orange-on-
+  orange (my .ev-rsvp override) → outlined active style.
+- Tests: /tmp/backlog-test.mjs 78 green (wish semantics incl. A7b/A8, reset
+  lifecycle, events perms/upsert/votes, borrow conflicts + auto-decline, tag
+  cap/normalize, activity kinds/order/403). Rivalry 34 + regression 18 still
+  green. One real bug found by suite: newInviteCode missing from server.js
+  imports (reset route 500).
+- Prod: backup-pre-backlog-pack.db on volume + /tmp/prod-pre-backlog.db local
+  (158 games), deploy = machine v16, smoke: all new endpoints 200, payload has
+  tags/grabs, pendingRequests present, 31 sprite symbols live, no writes.
