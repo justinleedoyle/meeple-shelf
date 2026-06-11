@@ -9,6 +9,7 @@ import {
   verifyPassword,
   hashPassword,
   newSessionToken,
+  newInviteCode,
   createUser,
   createCrew,
   findOrCreateGame,
@@ -177,7 +178,11 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', (req, res) => {
   const user = currentUser(req);
-  res.json({ user: user ? userToJson(user) : null });
+  // pendingRequests powers the Account-tab badge: borrow requests waiting on you
+  const pendingRequests = user
+    ? db.prepare("SELECT COUNT(*) AS n FROM borrow_requests WHERE owner_id = ? AND status = 'pending'").get(user.id).n
+    : 0;
+  res.json({ user: user ? userToJson(user) : null, pendingRequests });
 });
 
 app.post('/api/me/password', requireAuth, (req, res) => {
@@ -194,6 +199,55 @@ app.post('/api/me/password', requireAuth, (req, res) => {
   const token = parseCookies(req).session;
   db.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').run(req.user.id, token);
   res.json({ ok: true });
+});
+
+// ---------- password reset (no email on this server, so a crewmate vouches
+// for you: they generate a one-time code and hand it over in person/text) ----------
+
+app.post('/api/crewmates/:id/reset-code', requireAuth, (req, res) => {
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'No such user' });
+  if (target.id === req.user.id) {
+    return res.status(400).json({ error: 'Use "Change password" for your own account' });
+  }
+  if (!crewmateIds(req.user.id).includes(target.id)) {
+    return res.status(403).json({ error: 'You can only generate reset codes for members of your crews' });
+  }
+  const raw = newInviteCode(8);
+  db.transaction(() => {
+    // one live code per person: a new code retires any outstanding ones
+    db.prepare("UPDATE reset_codes SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL").run(target.id);
+    db.prepare("INSERT INTO reset_codes (user_id, code_hash, created_by, expires_at) VALUES (?, ?, ?, datetime('now', '+1 hour'))")
+      .run(target.id, hashPassword(raw), req.user.id);
+  })();
+  res.status(201).json({
+    code: `${raw.slice(0, 4)}-${raw.slice(4)}`,
+    expiresMinutes: 60,
+    username: target.username,
+    displayName: target.display_name,
+  });
+});
+
+app.post('/api/reset-password', rateLimitAuth, (req, res) => {
+  const username = String(req.body.username || '').trim();
+  const code = String(req.body.code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const newPassword = String(req.body.newPassword || '');
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  const candidates = user
+    ? db.prepare("SELECT * FROM reset_codes WHERE user_id = ? AND used_at IS NULL AND expires_at > datetime('now')").all(user.id)
+    : [];
+  const match = candidates.find((c) => verifyPassword(code, c.code_hash));
+  if (!match) return res.status(401).json({ error: 'Invalid or expired reset code' });
+  db.transaction(() => {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), user.id);
+    db.prepare("UPDATE reset_codes SET used_at = datetime('now') WHERE id = ?").run(match.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id); // every old session dies with the old password
+  })();
+  startSession(res, user.id);
+  res.json({ user: userToJson(user) });
 });
 
 app.patch('/api/me/sharing', requireAuth, (req, res) => {
@@ -290,11 +344,14 @@ async function upgradeGameMeta(game) {
 
 // ---------- my library ----------
 
+const ENTRY_STATUSES = ['owned', 'wish', 'grabs'];
+
 function entryToJson(r) {
   return {
     id: r.entry_id,
     notes: r.notes,
     addedAt: r.added_at,
+    status: r.entry_status || 'owned',
     loanedTo: r.loaned_to_id ? { id: r.loaned_to_id, displayName: r.loaned_to_name } : null,
     dueDate: r.due_date_ || null,
     loanedOutAt: r.loaned_out_at || null,
@@ -303,7 +360,7 @@ function entryToJson(r) {
 }
 
 const ENTRY_SELECT = `
-  SELECT le.id AS entry_id, le.notes, le.added_at, le.due_date AS due_date_,
+  SELECT le.id AS entry_id, le.notes, le.added_at, le.due_date AS due_date_, le.status AS entry_status,
          le.loaned_to AS loaned_to_id, lb.display_name AS loaned_to_name,
          (SELECT ev.out_at FROM loan_events ev
            WHERE ev.game_id = le.game_id AND ev.owner_id = le.user_id AND ev.returned_at IS NULL
@@ -347,11 +404,18 @@ app.post('/api/library', requireAuth, (req, res) => {
   }
 
   const notes = String(req.body.notes || '').slice(0, 500);
+  const status = ENTRY_STATUSES.includes(req.body.status) ? req.body.status : 'owned';
   let added = 0;
   for (const uid of ownerIds) {
     added += db
-      .prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id, notes) VALUES (?, ?, ?)')
-      .run(uid, game.id, notes).changes;
+      .prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id, notes, status) VALUES (?, ?, ?, ?)')
+      .run(uid, game.id, notes, status).changes;
+    // buying a wishlisted game: re-adding it as owned upgrades the wish entry
+    if (status === 'owned') {
+      added += db
+        .prepare("UPDATE library_entries SET status = 'owned' WHERE user_id = ? AND game_id = ? AND status = 'wish'")
+        .run(uid, game.id).changes;
+    }
   }
   upgradeGameMeta(game); // async, non-blocking
   res.status(201).json({ game: gameToJson(game), added, requested: ownerIds.length });
@@ -385,6 +449,16 @@ app.patch('/api/library/:id', requireAuth, (req, res) => {
   // are ignored rather than nulling a direction the group chose; explicit null clears.
   if (req.body.scoreDir === null || ['high', 'low', 'coop'].includes(req.body.scoreDir)) {
     db.prepare('UPDATE games SET score_dir = ? WHERE id = ?').run(req.body.scoreDir, entry.game_id);
+  }
+  // Copy status: on the shelf, on the wishlist, or up for grabs. A copy that's
+  // currently lent out can't become a wish — unless this same save also brings
+  // it home (the edit modal clears the loan when you pick "wishlist").
+  if (req.body.status !== undefined && ENTRY_STATUSES.includes(req.body.status) && req.body.status !== entry.status) {
+    const returningNow = req.body.loanedTo !== undefined && (req.body.loanedTo == null || req.body.loanedTo === '');
+    if (req.body.status === 'wish' && entry.loaned_to != null && !returningNow) {
+      return res.status(400).json({ error: 'This copy is lent out — mark it returned before moving it to your wishlist' });
+    }
+    db.prepare('UPDATE library_entries SET status = ? WHERE id = ?').run(req.body.status, entry.id);
   }
   // Lend this copy to a crewmate ("loanedTo": userId) or bring it home (null),
   // optionally with a due-back date. Loan changes are journaled to loan_events.
@@ -440,8 +514,12 @@ app.get('/api/shared/:slug', (req, res) => {
     return res.status(404).json({ error: "This shelf doesn't exist or is private" });
   }
   // public route: strip loan logistics (due dates, checkout timestamps)
-  const entries = libraryEntriesFor(owner.id).map(({ dueDate, loanedOutAt, ...rest }) => rest);
-  res.json({ owner: { displayName: owner.display_name }, entries });
+  const all = libraryEntriesFor(owner.id).map(({ dueDate, loanedOutAt, ...rest }) => rest);
+  res.json({
+    owner: { displayName: owner.display_name },
+    entries: all.filter((e) => e.status !== 'wish'),
+    wishlist: all.filter((e) => e.status === 'wish').map(({ loanedTo, ...rest }) => rest),
+  });
 });
 
 // ---------- crews (groups with a combined library) ----------
@@ -460,7 +538,7 @@ app.get('/api/crews', requireAuth, (req, res) => {
         (SELECT COUNT(*) FROM crew_members cm WHERE cm.crew_id = c.id) AS member_count,
         (SELECT COUNT(DISTINCT le.game_id) FROM crew_members cm
           JOIN library_entries le ON le.user_id = cm.user_id
-          WHERE cm.crew_id = c.id) AS game_count
+          WHERE cm.crew_id = c.id AND le.status != 'wish') AS game_count
        FROM crews c JOIN crew_members me ON me.crew_id = c.id
        WHERE me.user_id = ? ORDER BY c.created_at DESC, c.id DESC`
     )
@@ -500,7 +578,7 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
   const members = db
     .prepare(
       `SELECT u.id, u.display_name,
-        (SELECT COUNT(*) FROM library_entries le WHERE le.user_id = u.id) AS game_count
+        (SELECT COUNT(*) FROM library_entries le WHERE le.user_id = u.id AND le.status != 'wish') AS game_count
        FROM crew_members cm JOIN users u ON u.id = cm.user_id
        WHERE cm.crew_id = ? ORDER BY cm.joined_at, u.id`
     )
@@ -508,10 +586,11 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
     .map((m) => ({ id: m.id, displayName: m.display_name, gameCount: m.game_count }));
 
   // The combined library: every game any member owns, with its owners attached
-  // (and where each copy physically is, if lent out).
+  // (and where each copy physically is, if lent out). Wishlist entries are
+  // wants, not games on a shelf — they stay out of the combined library.
   const rows = db
     .prepare(
-      `SELECT g.*, u.id AS owner_id, u.display_name AS owner_name,
+      `SELECT g.*, u.id AS owner_id, u.display_name AS owner_name, le.status AS entry_status,
               le.loaned_to AS loaned_to_id, lb.display_name AS loaned_to_name,
               le.due_date AS due_date_,
               (SELECT ev.out_at FROM loan_events ev
@@ -522,10 +601,16 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
        JOIN games g ON g.id = le.game_id
        JOIN users u ON u.id = cm.user_id
        LEFT JOIN users lb ON lb.id = le.loaned_to
-       WHERE cm.crew_id = ?
+       WHERE cm.crew_id = ? AND le.status != 'wish'
        ORDER BY g.title COLLATE NOCASE, u.display_name`
     )
     .all(crew.id);
+  const tagRows = db.prepare('SELECT game_id, tag FROM game_tags WHERE crew_id = ? ORDER BY tag').all(crew.id);
+  const tagsBy = new Map();
+  for (const t of tagRows) {
+    if (!tagsBy.has(t.game_id)) tagsBy.set(t.game_id, []);
+    tagsBy.get(t.game_id).push(t.tag);
+  }
   // play counts per game power the Never-played filter, Last-played sort,
   // weighted Surprise, and milestone badges — one GROUP BY, no N+1
   const playAgg = new Map(
@@ -540,12 +625,14 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
         ...gameToJson(r),
         playCount: playAgg.get(r.id)?.n || 0,
         lastPlayedAt: playAgg.get(r.id)?.last || null,
+        tags: tagsBy.get(r.id) || [],
         owners: [],
       });
     }
     byGame.get(r.id).owners.push({
       id: r.owner_id,
       displayName: r.owner_name,
+      grabs: r.entry_status === 'grabs',
       loanedTo: r.loaned_to_id ? { id: r.loaned_to_id, displayName: r.loaned_to_name } : null,
       dueDate: r.due_date_ || null,
       loanedOutAt: r.loaned_out_at || null,
@@ -583,7 +670,7 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
       ? req.body.userIds.map((id) => ({ id }))
       : [];
   const prevLoans = new Map(
-    db.prepare(`SELECT user_id, loaned_to, due_date FROM library_entries WHERE game_id = ? AND user_id IN (${memberIds.map(() => '?').join(',')})`)
+    db.prepare(`SELECT user_id, loaned_to, due_date FROM library_entries WHERE game_id = ? AND status != 'wish' AND user_id IN (${memberIds.map(() => '?').join(',')})`)
       .all(game.id, ...memberIds)
       .map((r) => [r.user_id, { loanedTo: r.loaned_to ?? null, dueDate: r.due_date ?? null }])
   );
@@ -611,6 +698,8 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
       if (want.has(uid)) {
         const o = want.get(uid);
         db.prepare('INSERT OR IGNORE INTO library_entries (user_id, game_id) VALUES (?, ?)').run(uid, game.id);
+        // marking someone as an owner upgrades a lingering wishlist row to a real copy
+        db.prepare("UPDATE library_entries SET status = 'owned' WHERE user_id = ? AND game_id = ? AND status = 'wish'").run(uid, game.id);
         if (o.loanedTo !== undefined) {
           const next = o.loanedTo;
           // fresh due date if supplied; keep the old one only when the same loan continues
@@ -620,7 +709,8 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
         }
       } else {
         if (prev.loanedTo != null) logLoanChange(game.id, uid, prev.loanedTo, null);
-        db.prepare('DELETE FROM library_entries WHERE user_id = ? AND game_id = ?').run(uid, game.id);
+        // unchecking an owner removes their copy — but never someone's wishlist row
+        db.prepare("DELETE FROM library_entries WHERE user_id = ? AND game_id = ? AND status != 'wish'").run(uid, game.id);
       }
     }
   })();
@@ -630,7 +720,7 @@ app.put('/api/crews/:id/games/:gameId/owners', requireAuth, (req, res) => {
       `SELECT u.id, u.display_name, le.loaned_to AS loaned_to_id, lb.display_name AS loaned_to_name, le.due_date AS due_date_
        FROM library_entries le JOIN users u ON u.id = le.user_id
        LEFT JOIN users lb ON lb.id = le.loaned_to
-       WHERE le.game_id = ? AND le.user_id IN (${memberIds.map(() => '?').join(',')}) ORDER BY u.display_name`
+       WHERE le.game_id = ? AND le.status != 'wish' AND le.user_id IN (${memberIds.map(() => '?').join(',')}) ORDER BY u.display_name`
     )
     .all(game.id, ...memberIds);
   res.json({
@@ -1008,6 +1098,407 @@ app.get('/api/games/:id/loans', requireAuth, (req, res) => {
     )
     .all(game.id, ...visible);
   res.json({ total, loans: events.map((e) => ({ ownerName: e.ownerName, borrowerName: e.borrowerName, outAt: e.out_at, returnedAt: e.returned_at })) });
+});
+
+// ---------- game nights (propose a night, RSVP, vote on what to play) ----------
+
+const RSVP_VALUES = ['in', 'maybe', 'out'];
+const timeOrNull = (v) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(v ?? '').trim()) ? String(v).trim() : null);
+
+// one loader for every events response so create/RSVP/vote all round-trip the
+// same shape the list view renders
+function eventsFor(crewId, userId, onlyEventId = null) {
+  const events = db
+    .prepare(
+      `SELECT e.*, cu.display_name AS created_name, hu.display_name AS host_name
+       FROM events e JOIN users cu ON cu.id = e.created_by
+       LEFT JOIN users hu ON hu.id = e.host_user_id
+       WHERE e.crew_id = ? AND (? IS NULL OR e.id = ?)
+       ORDER BY e.event_date, e.id`
+    )
+    .all(crewId, onlyEventId, onlyEventId);
+  if (!events.length) return [];
+  const ids = events.map((e) => e.id);
+  const ph = ids.map(() => '?').join(',');
+  const rsvps = db
+    .prepare(
+      `SELECT r.event_id, r.response, u.id, u.display_name FROM event_rsvps r
+       JOIN users u ON u.id = r.user_id WHERE r.event_id IN (${ph}) ORDER BY r.updated_at, u.id`
+    )
+    .all(...ids);
+  const votes = db
+    .prepare(
+      `SELECT v.event_id, v.game_id, g.title, g.image_url, v.user_id, u.display_name
+       FROM event_votes v JOIN games g ON g.id = v.game_id JOIN users u ON u.id = v.user_id
+       WHERE v.event_id IN (${ph}) ORDER BY g.title COLLATE NOCASE`
+    )
+    .all(...ids);
+  return events.map((e) => {
+    const r = { in: [], maybe: [], out: [] };
+    let myRsvp = null;
+    for (const row of rsvps.filter((x) => x.event_id === e.id)) {
+      r[row.response].push({ id: row.id, displayName: row.display_name });
+      if (row.id === userId) myRsvp = row.response;
+    }
+    const byGame = new Map();
+    for (const v of votes.filter((x) => x.event_id === e.id)) {
+      if (!byGame.has(v.game_id)) byGame.set(v.game_id, { gameId: v.game_id, title: v.title, imageUrl: v.image_url, count: 0, voters: [], mine: false });
+      const g = byGame.get(v.game_id);
+      g.count++;
+      g.voters.push(v.display_name);
+      if (v.user_id === userId) g.mine = true;
+    }
+    return {
+      id: e.id,
+      title: e.title,
+      date: e.event_date,
+      time: e.start_time,
+      notes: e.notes,
+      canceled: !!e.canceled_at,
+      createdBy: { id: e.created_by, displayName: e.created_name },
+      host: e.host_user_id ? { id: e.host_user_id, displayName: e.host_name } : null,
+      rsvps: r,
+      myRsvp,
+      votes: [...byGame.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
+    };
+  });
+}
+
+app.get('/api/crews/:id/events', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  res.json({ events: eventsFor(crew.id, req.user.id) });
+});
+
+app.post('/api/crews/:id/events', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const date = dateOrNull(req.body.date);
+  if (!date) return res.status(400).json({ error: 'Pick a date for game night' });
+  const title = String(req.body.title || '').trim().slice(0, 60) || 'Game night';
+  const time = timeOrNull(req.body.time);
+  const notes = String(req.body.notes || '').slice(0, 300);
+  const hostId = intOrNull(req.body.hostId, 1, 99999999);
+  if (hostId != null) {
+    const isMember = db.prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?').get(crew.id, hostId);
+    if (!isMember) return res.status(400).json({ error: 'The host must be a member of this crew' });
+  }
+  let eventId;
+  db.transaction(() => {
+    eventId = db
+      .prepare('INSERT INTO events (crew_id, title, event_date, start_time, host_user_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(crew.id, title, date, time, hostId, notes, req.user.id).lastInsertRowid;
+    db.prepare("INSERT INTO event_rsvps (event_id, user_id, response) VALUES (?, ?, 'in')").run(eventId, req.user.id); // planning it means you're in
+  })();
+  res.status(201).json({ event: eventsFor(crew.id, req.user.id, Number(eventId))[0] });
+});
+
+// shared guard: event must exist and the caller must be in its crew
+function eventOfMine(req, res) {
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
+  if (!event) {
+    res.status(404).json({ error: 'Event not found' });
+    return null;
+  }
+  const isMember = db
+    .prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?')
+    .get(event.crew_id, req.user.id);
+  if (!isMember) {
+    res.status(403).json({ error: 'You are not a member of this crew' });
+    return null;
+  }
+  return event;
+}
+
+app.patch('/api/events/:id', requireAuth, (req, res) => {
+  const event = eventOfMine(req, res);
+  if (!event) return;
+  if (event.created_by !== req.user.id && event.host_user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Only the planner or the host can edit this night' });
+  }
+  const sets = {};
+  if (req.body.title !== undefined) sets.title = String(req.body.title || '').trim().slice(0, 60) || 'Game night';
+  if (req.body.date !== undefined) {
+    const d = dateOrNull(req.body.date);
+    if (!d) return res.status(400).json({ error: 'That date doesn’t look right' });
+    sets.event_date = d;
+  }
+  if (req.body.time !== undefined) sets.start_time = timeOrNull(req.body.time);
+  if (req.body.notes !== undefined) sets.notes = String(req.body.notes || '').slice(0, 300);
+  if (req.body.hostId !== undefined) {
+    const hostId = intOrNull(req.body.hostId, 1, 99999999);
+    if (hostId != null) {
+      const isMember = db.prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?').get(event.crew_id, hostId);
+      if (!isMember) return res.status(400).json({ error: 'The host must be a member of this crew' });
+    }
+    sets.host_user_id = hostId;
+  }
+  if (req.body.canceled !== undefined) sets.canceled_at = req.body.canceled ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null;
+  if (Object.keys(sets).length) {
+    db.prepare(`UPDATE events SET ${Object.keys(sets).map((k) => k + ' = ?').join(', ')} WHERE id = ?`)
+      .run(...Object.values(sets), event.id);
+  }
+  res.json({ event: eventsFor(event.crew_id, req.user.id, event.id)[0] });
+});
+
+app.post('/api/events/:id/rsvp', requireAuth, (req, res) => {
+  const event = eventOfMine(req, res);
+  if (!event) return;
+  if (event.canceled_at) return res.status(400).json({ error: 'This night was called off' });
+  const response = String(req.body.response || '');
+  if (!RSVP_VALUES.includes(response)) return res.status(400).json({ error: 'RSVP must be in, maybe, or out' });
+  db.prepare(
+    `INSERT INTO event_rsvps (event_id, user_id, response) VALUES (?, ?, ?)
+     ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response, updated_at = datetime('now')`
+  ).run(event.id, req.user.id, response);
+  res.json({ event: eventsFor(event.crew_id, req.user.id, event.id)[0] });
+});
+
+app.post('/api/events/:id/vote', requireAuth, (req, res) => {
+  const event = eventOfMine(req, res);
+  if (!event) return;
+  if (event.canceled_at) return res.status(400).json({ error: 'This night was called off' });
+  const gameId = intOrNull(req.body.gameId, 1, 99999999);
+  // votes come from the crew's actual shelves — wishes and strangers' games don't count
+  const onShelf = gameId && db
+    .prepare(
+      `SELECT 1 FROM library_entries le JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = ?
+       WHERE le.game_id = ? AND le.status != 'wish' LIMIT 1`
+    )
+    .get(event.crew_id, gameId);
+  if (!onShelf) return res.status(400).json({ error: "Pick a game from the crew's library" });
+  const removed = db
+    .prepare('DELETE FROM event_votes WHERE event_id = ? AND game_id = ? AND user_id = ?')
+    .run(event.id, gameId, req.user.id).changes;
+  if (!removed) {
+    db.prepare('INSERT INTO event_votes (event_id, game_id, user_id) VALUES (?, ?, ?)').run(event.id, gameId, req.user.id);
+  }
+  res.json({ event: eventsFor(event.crew_id, req.user.id, event.id)[0] });
+});
+
+// ---------- borrow requests (ask → owner one-tap approves → loan opens) ----------
+
+function borrowRequestToJson(r) {
+  return {
+    id: r.id,
+    status: r.status,
+    note: r.note,
+    createdAt: r.created_at,
+    resolvedAt: r.resolved_at,
+    game: { id: r.game_id, title: r.title, imageUrl: r.image_url },
+    owner: { id: r.owner_id, displayName: r.owner_name },
+    requester: { id: r.requester_id, displayName: r.requester_name },
+  };
+}
+
+const BORROW_SELECT = `
+  SELECT br.*, g.title, g.image_url,
+         ou.display_name AS owner_name, ru.display_name AS requester_name
+  FROM borrow_requests br
+  JOIN games g ON g.id = br.game_id
+  JOIN users ou ON ou.id = br.owner_id
+  JOIN users ru ON ru.id = br.requester_id`;
+
+app.post('/api/games/:id/borrow-requests', requireAuth, (req, res) => {
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  const ownerId = intOrNull(req.body.ownerId, 1, 99999999);
+  if (ownerId == null || ownerId === req.user.id) {
+    return res.status(400).json({ error: 'Pick whose copy you want to borrow' });
+  }
+  if (!crewmateIds(req.user.id).includes(ownerId)) {
+    return res.status(403).json({ error: 'You can only borrow from members of your crews' });
+  }
+  const entry = db
+    .prepare("SELECT * FROM library_entries WHERE user_id = ? AND game_id = ? AND status != 'wish'")
+    .get(ownerId, game.id);
+  if (!entry) return res.status(404).json({ error: "They don't have that game on their shelf" });
+  if (entry.loaned_to === req.user.id) return res.status(400).json({ error: 'You already have this copy' });
+  const dup = db
+    .prepare("SELECT 1 FROM borrow_requests WHERE game_id = ? AND owner_id = ? AND requester_id = ? AND status = 'pending'")
+    .get(game.id, ownerId, req.user.id);
+  if (dup) return res.status(409).json({ error: 'You already asked — give them a minute' });
+  const note = String(req.body.note || '').slice(0, 200);
+  const info = db
+    .prepare('INSERT INTO borrow_requests (game_id, owner_id, requester_id, note) VALUES (?, ?, ?, ?)')
+    .run(game.id, ownerId, req.user.id, note);
+  const row = db.prepare(`${BORROW_SELECT} WHERE br.id = ?`).get(info.lastInsertRowid);
+  res.status(201).json({ request: borrowRequestToJson(row) });
+});
+
+app.get('/api/borrow-requests', requireAuth, (req, res) => {
+  const incoming = db
+    .prepare(`${BORROW_SELECT} WHERE br.owner_id = ? AND br.status = 'pending' ORDER BY br.id DESC`)
+    .all(req.user.id)
+    .map(borrowRequestToJson);
+  // your own asks: everything open plus the last two weeks of answers
+  const outgoing = db
+    .prepare(
+      `${BORROW_SELECT} WHERE br.requester_id = ?
+       AND (br.status = 'pending' OR br.resolved_at >= datetime('now', '-14 days'))
+       ORDER BY br.id DESC LIMIT 20`
+    )
+    .all(req.user.id)
+    .map(borrowRequestToJson);
+  res.json({ incoming, outgoing });
+});
+
+app.post('/api/borrow-requests/:id/respond', requireAuth, (req, res) => {
+  const r = db.prepare('SELECT * FROM borrow_requests WHERE id = ?').get(req.params.id);
+  if (!r) return res.status(404).json({ error: 'Request not found' });
+  if (r.owner_id !== req.user.id) return res.status(403).json({ error: 'Only the owner can answer this request' });
+  if (r.status !== 'pending') return res.status(409).json({ error: 'This request was already answered' });
+  const action = String(req.body.action || '');
+  if (action === 'decline') {
+    db.prepare("UPDATE borrow_requests SET status = 'declined', resolved_at = datetime('now') WHERE id = ?").run(r.id);
+  } else if (action === 'approve') {
+    const entry = db
+      .prepare("SELECT * FROM library_entries WHERE user_id = ? AND game_id = ? AND status != 'wish'")
+      .get(r.owner_id, r.game_id);
+    if (!entry) return res.status(409).json({ error: 'That game is no longer on your shelf' });
+    if (entry.loaned_to != null && entry.loaned_to !== r.requester_id) {
+      return res.status(409).json({ error: 'That copy is already out — mark it returned first' });
+    }
+    const dueDate = dateOrNull(req.body.dueDate);
+    db.transaction(() => {
+      db.prepare('UPDATE library_entries SET loaned_to = ?, due_date = ? WHERE id = ?').run(r.requester_id, dueDate, entry.id);
+      logLoanChange(r.game_id, r.owner_id, entry.loaned_to, r.requester_id);
+      db.prepare("UPDATE borrow_requests SET status = 'approved', resolved_at = datetime('now') WHERE id = ?").run(r.id);
+      // same copy can't go two places: other open asks for it close out
+      db.prepare(
+        "UPDATE borrow_requests SET status = 'declined', resolved_at = datetime('now') WHERE game_id = ? AND owner_id = ? AND status = 'pending' AND id != ?"
+      ).run(r.game_id, r.owner_id, r.id);
+    })();
+  } else {
+    return res.status(400).json({ error: 'Action must be approve or decline' });
+  }
+  const row = db.prepare(`${BORROW_SELECT} WHERE br.id = ?`).get(r.id);
+  res.json({ request: borrowRequestToJson(row) });
+});
+
+app.post('/api/borrow-requests/:id/cancel', requireAuth, (req, res) => {
+  const r = db.prepare('SELECT * FROM borrow_requests WHERE id = ?').get(req.params.id);
+  if (!r) return res.status(404).json({ error: 'Request not found' });
+  if (r.requester_id !== req.user.id) return res.status(403).json({ error: 'Only the asker can cancel a request' });
+  if (r.status !== 'pending') return res.status(409).json({ error: 'This request was already answered' });
+  db.prepare("UPDATE borrow_requests SET status = 'canceled', resolved_at = datetime('now') WHERE id = ?").run(r.id);
+  const row = db.prepare(`${BORROW_SELECT} WHERE br.id = ?`).get(r.id);
+  res.json({ request: borrowRequestToJson(row) });
+});
+
+// ---------- crew tags ("gateway", "good with grandma") ----------
+
+function normalizeTag(raw) {
+  const t = String(raw ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 +&'/-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24)
+    .trim();
+  return t.length >= 2 ? t : null;
+}
+
+function tagsFor(crewId, gameId) {
+  return db.prepare('SELECT tag FROM game_tags WHERE crew_id = ? AND game_id = ? ORDER BY tag').all(crewId, gameId).map((r) => r.tag);
+}
+
+app.post('/api/crews/:id/games/:gameId/tags', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const tag = normalizeTag(req.body.tag);
+  if (!tag) return res.status(400).json({ error: 'Tags are 2–24 letters and numbers' });
+  const onShelf = db
+    .prepare(
+      `SELECT 1 FROM library_entries le JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = ?
+       WHERE le.game_id = ? AND le.status != 'wish' LIMIT 1`
+    )
+    .get(crew.id, req.params.gameId);
+  if (!onShelf) return res.status(404).json({ error: "That game isn't in this crew's library" });
+  const count = db.prepare('SELECT COUNT(*) AS n FROM game_tags WHERE crew_id = ? AND game_id = ?').get(crew.id, req.params.gameId).n;
+  if (count >= 8) return res.status(400).json({ error: 'Eight tags is plenty for one game' });
+  db.prepare('INSERT OR IGNORE INTO game_tags (game_id, crew_id, tag, created_by) VALUES (?, ?, ?, ?)')
+    .run(req.params.gameId, crew.id, tag, req.user.id);
+  res.json({ tags: tagsFor(crew.id, Number(req.params.gameId)) });
+});
+
+app.delete('/api/crews/:id/games/:gameId/tags/:tag', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const tag = normalizeTag(req.params.tag);
+  if (tag) db.prepare('DELETE FROM game_tags WHERE crew_id = ? AND game_id = ? AND tag = ?').run(crew.id, req.params.gameId, tag);
+  res.json({ tags: tagsFor(crew.id, Number(req.params.gameId)) });
+});
+
+// gift ideas: every member's wishlist in one place (member-only — the public
+// shelf shows wishes too, but this works even for private shelves)
+app.get('/api/crews/:id/wishlists', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const rows = db
+    .prepare(
+      `SELECT u.id AS uid, u.display_name, g.id AS gid, g.title, g.year, g.image_url
+       FROM crew_members cm
+       JOIN library_entries le ON le.user_id = cm.user_id AND le.status = 'wish'
+       JOIN users u ON u.id = cm.user_id
+       JOIN games g ON g.id = le.game_id
+       WHERE cm.crew_id = ? ORDER BY u.display_name, g.title COLLATE NOCASE`
+    )
+    .all(crew.id);
+  const byMember = new Map();
+  for (const r of rows) {
+    if (!byMember.has(r.uid)) byMember.set(r.uid, { id: r.uid, displayName: r.display_name, items: [] });
+    byMember.get(r.uid).items.push({ gameId: r.gid, title: r.title, year: r.year, imageUrl: r.image_url });
+  }
+  res.json({ wishlists: [...byMember.values()] });
+});
+
+// ---------- crew activity feed (derived — no new data entry) ----------
+
+app.get('/api/crews/:id/activity', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const rows = db
+    .prepare(
+      `SELECT * FROM (
+         SELECT 'add' AS kind, le.added_at AS ts, u.display_name AS who, g.title AS title, g.id AS game_id, NULL AS extra
+         FROM library_entries le
+         JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = @crew
+         JOIN users u ON u.id = le.user_id JOIN games g ON g.id = le.game_id
+         WHERE le.status != 'wish'
+         UNION ALL
+         SELECT 'wish', le.added_at, u.display_name, g.title, g.id, NULL
+         FROM library_entries le
+         JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = @crew
+         JOIN users u ON u.id = le.user_id JOIN games g ON g.id = le.game_id
+         WHERE le.status = 'wish'
+         UNION ALL
+         SELECT 'loan', ev.out_at, ou.display_name, g.title, g.id, bu.display_name
+         FROM loan_events ev
+         JOIN crew_members cmo ON cmo.user_id = ev.owner_id AND cmo.crew_id = @crew
+         JOIN crew_members cmb ON cmb.user_id = ev.borrower_id AND cmb.crew_id = @crew
+         JOIN users ou ON ou.id = ev.owner_id JOIN users bu ON bu.id = ev.borrower_id
+         JOIN games g ON g.id = ev.game_id
+         UNION ALL
+         SELECT 'return', ev.returned_at, ou.display_name, g.title, g.id, bu.display_name
+         FROM loan_events ev
+         JOIN crew_members cmo ON cmo.user_id = ev.owner_id AND cmo.crew_id = @crew
+         JOIN crew_members cmb ON cmb.user_id = ev.borrower_id AND cmb.crew_id = @crew
+         JOIN users ou ON ou.id = ev.owner_id JOIN users bu ON bu.id = ev.borrower_id
+         JOIN games g ON g.id = ev.game_id
+         WHERE ev.returned_at IS NOT NULL
+         UNION ALL
+         SELECT 'play', p.created_at, COALESCE(u.display_name, 'Someone'), g.title, g.id, p.played_at
+         FROM plays p LEFT JOIN users u ON u.id = p.logged_by JOIN games g ON g.id = p.game_id
+         WHERE p.crew_id = @crew
+         UNION ALL
+         SELECT 'night', e.created_at, u.display_name, e.title, NULL, e.event_date
+         FROM events e JOIN users u ON u.id = e.created_by
+         WHERE e.crew_id = @crew
+       ) ORDER BY ts DESC LIMIT 40`
+    )
+    .all({ crew: crew.id });
+  res.json({ activity: rows.map((r) => ({ kind: r.kind, ts: r.ts, who: r.who, title: r.title, gameId: r.game_id, extra: r.extra })) });
 });
 
 app.post('/api/crews/:id/leave', requireAuth, (req, res) => {

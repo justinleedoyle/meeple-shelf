@@ -29,7 +29,7 @@ if (!crew) {
 const members = db
   .prepare(
     `SELECT u.id, u.display_name AS displayName,
-      (SELECT COUNT(*) FROM library_entries le WHERE le.user_id = u.id) AS gameCount
+      (SELECT COUNT(*) FROM library_entries le WHERE le.user_id = u.id AND le.status != 'wish') AS gameCount
      FROM crew_members cm JOIN users u ON u.id = cm.user_id
      WHERE cm.crew_id = ? ORDER BY cm.joined_at, u.id`
   )
@@ -46,7 +46,7 @@ const rows = db
      JOIN games g ON g.id = le.game_id
      JOIN users u ON u.id = cm.user_id
      LEFT JOIN users lb ON lb.id = le.loaned_to
-     WHERE cm.crew_id = ?
+     WHERE cm.crew_id = ? AND le.status != 'wish'
      ORDER BY g.title COLLATE NOCASE, u.display_name`
   )
   .all(crew.id);

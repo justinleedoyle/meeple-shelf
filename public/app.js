@@ -71,6 +71,29 @@ function localISODate() {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
 
+// compact relative time for feeds: 'now', '5m', '3h', '6d', then a real date
+function timeAgo(ts) {
+  const d = new Date(String(ts).replace(' ', 'T') + (String(ts).includes('Z') ? '' : 'Z'));
+  if (isNaN(d)) return '';
+  const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (s < 90) return 'now';
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86400) return `${Math.round(s / 3600)}h`;
+  if (s < 86400 * 14) return `${Math.round(s / 86400)}d`;
+  return fmtDate(ts);
+}
+
+// 'YYYY-MM-DD' → { dow: 'FRI', day: '13', mon: 'Jun' } for event date blocks
+function dateParts(s) {
+  const d = new Date(s + 'T00:00');
+  if (isNaN(d)) return { dow: '?', day: '?', mon: '' };
+  return {
+    dow: d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
+    day: String(d.getDate()),
+    mon: d.toLocaleDateString(undefined, { month: 'short' }),
+  };
+}
+
 // loan badge for cards: plain when on time, alarmed when past due
 function loanBadge(loanedTo, dueDate) {
   if (!loanedTo) return '';
@@ -186,7 +209,7 @@ function expShortTitle(g) {
   return sep === -1 ? g.title : g.title.slice(sep + 3);
 }
 
-function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners, loanedTo, dueDate, playCount, expansions, expanded } = {}) {
+function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners, loanedTo, dueDate, playCount, expansions, expanded, extraBadges, gotIt } = {}) {
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   const players = fmtPlayers(game);
   const time = fmtTime(game);
@@ -198,6 +221,7 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
       ${game.imageUrl ? `<img loading="lazy" src="${esc(game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
     </div>
     ${actions ? `<div class="card-actions">
+      ${gotIt ? `<button class="icon-btn gotit" data-act="gotit" title="Got it! Move to my shelf">${icon('check')}</button>` : ''}
       <button class="icon-btn" data-act="edit" title="Edit details">${icon('pencil')}</button>
     </div>` : ''}
     ${editOwners ? `<div class="card-actions">
@@ -210,6 +234,7 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
         ${time ? `<span class="badge">${time}</span>` : ''}
         ${game.category ? `<span class="badge">${esc(game.category)}</span>` : ''}
         ${(() => { const ms = milestoneTier(playCount || 0); return ms ? `<span class="badge milestone" title="${ms.n}+ crew plays">${icon('award')} ${ms.label}</span>` : ''; })()}
+        ${extraBadges || ''}
         ${loanBadge(loanedTo, dueDate)}
       </div>
       ${notes ? `<div class="card-notes">${esc(notes)}</div>` : ''}
@@ -222,8 +247,19 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
 
 // ===================== state & router =====================
 
-const state = { user: null };
+const state = { user: null, pending: 0 }; // pending = borrow requests waiting on me
 const tabbarEl = $('#tabbar');
+
+async function refreshPending() {
+  try {
+    state.pending = (await api('/me')).pendingRequests || 0;
+  } catch { /* keep the old count */ }
+  const badge = $('#tab-account .tab-badge');
+  if (badge) badge.remove();
+  if (state.pending && $('#tab-account')) {
+    $('#tab-account').insertAdjacentHTML('beforeend', `<span class="tab-badge">${state.pending}</span>`);
+  }
+}
 
 // shimmer placeholders while data loads (only shown if a fetch takes >150ms)
 function skeletonHtml() {
@@ -242,7 +278,7 @@ function renderTabbar(active) {
   tabbarEl.innerHTML = `
     <button class="tab-item ${active === 'library' ? 'active' : ''}" data-go="#/library">${icon('dice')}<span>My Shelf</span></button>
     <button class="tab-item ${active === 'crews' || active === 'crew' ? 'active' : ''}" data-go="#/crews">${icon('users')}<span>Crews</span></button>
-    <button class="tab-item" id="tab-account">${icon('user')}<span>Account</span></button>`;
+    <button class="tab-item" id="tab-account">${icon('user')}<span>Account</span>${state.pending ? `<span class="tab-badge">${state.pending}</span>` : ''}</button>`;
   for (const btn of tabbarEl.querySelectorAll('[data-go]')) {
     btn.onclick = () => { location.hash = btn.dataset.go; };
   }
@@ -301,12 +337,54 @@ async function route() {
   }
 }
 
-function openAccountModal() {
+async function openAccountModal() {
+  let reqs = { incoming: [], outgoing: [] };
+  let mates = [];
+  try {
+    [reqs, { crewmates: mates }] = await Promise.all([api('/borrow-requests'), api('/crewmates')]);
+    mates = mates.filter((m) => !m.isMe);
+  } catch { /* sections render empty */ }
+
+  const statusChip = (s) =>
+    `<span class="badge req-${s}">${s === 'pending' ? 'waiting' : s === 'approved' ? `${icon('check')} lent` : s}</span>`;
+  const reqRow = (r, dir) => `
+    <div class="result-row" data-req="${r.id}">
+      ${r.game.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(r.game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+      <div class="r-grow">
+        <div class="r-title">${esc(r.game.title)}</div>
+        <div class="r-meta">${dir === 'in' ? `${esc(r.requester.displayName)} wants to borrow it` : `you asked ${esc(r.owner.displayName)}`}${r.note ? ` · “${esc(r.note)}”` : ''} · ${timeAgo(r.createdAt)}</div>
+        ${dir === 'in' ? `<div class="req-actions">
+          <input type="date" class="req-due" min="${localISODate()}" title="Due back (optional)">
+          <button class="btn btn-sm btn-primary" data-respond="approve">${icon('check')} Lend it</button>
+          <button class="btn btn-sm" data-respond="decline">Decline</button>
+        </div>` : ''}
+      </div>
+      ${dir === 'out' ? (r.status === 'pending' ? `<button class="btn btn-sm" data-cancel-req>Cancel</button>` : statusChip(r.status)) : ''}
+    </div>`;
+
   openModal(`
     <div class="modal-head"><h2>Account</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
     <div class="modal-body">
       <div style="color:var(--muted);font-size:14px">Signed in as <strong style="color:var(--text)">${esc(state.user.displayName)}</strong> (@${esc(state.user.username)})</div>
-      <h3 style="font-size:15px;margin-top:18px">Change password</h3>
+
+      ${reqs.incoming.length ? `
+      <h3 class="acct-h">${icon('bell')} Borrow requests</h3>
+      <div class="search-results" style="max-height:none" id="req-in">${reqs.incoming.map((r) => reqRow(r, 'in')).join('')}</div>` : ''}
+
+      ${reqs.outgoing.length ? `
+      <h3 class="acct-h">${icon('backpack')} Your asks</h3>
+      <div class="search-results" style="max-height:none" id="req-out">${reqs.outgoing.map((r) => reqRow(r, 'out')).join('')}</div>` : ''}
+
+      ${mates.length ? `
+      <h3 class="acct-h">${icon('key')} Help a crewmate back in</h3>
+      <div class="r-meta" style="margin-bottom:8px">Locked out? A crewmate generates a one-time code and hands it over — no email needed.</div>
+      <div style="display:flex;gap:8px">
+        <select id="rc-who" style="flex:1">${mates.map((m) => `<option value="${m.id}">${esc(m.displayName)}</option>`).join('')}</select>
+        <button class="btn" id="rc-gen">Generate code</button>
+      </div>
+      <div id="rc-result"></div>` : ''}
+
+      <h3 class="acct-h">Change password</h3>
       <label>Current password</label>
       <input type="password" id="p-current" autocomplete="current-password">
       <label>New password</label>
@@ -316,6 +394,60 @@ function openAccountModal() {
       <hr style="border:none;border-top:1px solid var(--line);margin:20px 0">
       <button class="btn" id="p-logout">Log out</button>
     </div>`);
+
+  if ($('#req-in')) {
+    $('#req-in').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-respond]');
+      if (!btn) return;
+      const row = e.target.closest('[data-req]');
+      btn.disabled = true;
+      try {
+        const { request } = await api(`/borrow-requests/${row.dataset.req}/respond`, {
+          method: 'POST',
+          body: { action: btn.dataset.respond, dueDate: row.querySelector('.req-due')?.value || null },
+        });
+        toast(request.status === 'approved' ? `Lent to ${request.requester.displayName} — it's on their loan list now` : 'Declined');
+        modalDirty = true;
+        await refreshPending();
+        openAccountModal(); // re-render with the row resolved
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message);
+      }
+    });
+  }
+  if ($('#req-out')) {
+    $('#req-out').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-cancel-req]');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        await api(`/borrow-requests/${e.target.closest('[data-req]').dataset.req}/cancel`, { method: 'POST' });
+        toast('Request canceled');
+        openAccountModal();
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message);
+      }
+    });
+  }
+  if ($('#rc-gen')) {
+    $('#rc-gen').onclick = async () => {
+      $('#rc-gen').disabled = true;
+      try {
+        const r = await api(`/crewmates/${$('#rc-who').value}/reset-code`, { method: 'POST' });
+        $('#rc-result').innerHTML = `
+          <div class="big-code" style="margin:12px 0 6px">${esc(r.code)}</div>
+          <div class="r-meta">For <strong>${esc(r.displayName)}</strong> (username: <strong>${esc(r.username)}</strong>) · expires in ${r.expiresMinutes} min · one use.
+          They tap “Forgot password?” on the login screen.</div>
+          <button class="btn btn-sm" id="rc-copy" style="margin-top:8px">Copy code</button>`;
+        $('#rc-copy').onclick = () => copyText(r.code);
+      } catch (err) {
+        toast(err.message);
+      }
+      $('#rc-gen').disabled = false;
+    };
+  }
   $('#p-logout').onclick = async () => {
     await api('/logout', { method: 'POST' });
     state.user = null;
@@ -358,33 +490,62 @@ function viewWelcome() {
           <label>Display name <span style="font-weight:400">(what friends see)</span></label>
           <input type="text" id="a-display" autocomplete="name" placeholder="Optional — defaults to username">
         </div>
-        <label>Password</label>
-        <input type="password" id="a-password" autocomplete="current-password" required>
+        <div id="pw-wrap">
+          <label>Password</label>
+          <input type="password" id="a-password" autocomplete="current-password">
+        </div>
+        <div id="reset-extra" style="display:none">
+          <label>Reset code <span style="font-weight:400">(ask a crewmate to generate one)</span></label>
+          <input type="text" id="a-code" autocomplete="one-time-code" placeholder="XXXX-XXXX" style="text-transform:uppercase;font-family:ui-monospace,Menlo,monospace;letter-spacing:2px">
+          <label>New password</label>
+          <input type="password" id="a-newpw" autocomplete="new-password" placeholder="At least 6 characters">
+        </div>
         <div class="form-error" id="a-error"></div>
         <button class="btn btn-primary" type="submit" id="a-submit">Log in</button>
+        <button class="link-btn" type="button" id="forgot-link">Forgot password?</button>
       </form>
     </div>
   </div>`;
 
   let mode = 'login';
+  const applyMode = () => {
+    $('#signup-extra').style.display = mode === 'signup' ? '' : 'none';
+    $('#pw-wrap').style.display = mode === 'reset' ? 'none' : '';
+    $('#reset-extra').style.display = mode === 'reset' ? '' : 'none';
+    $('#a-submit').textContent = mode === 'signup' ? 'Create my shelf' : mode === 'reset' ? 'Reset & log in' : 'Log in';
+    $('#forgot-link').textContent = mode === 'reset' ? '← Back to log in' : 'Forgot password?';
+    $('#a-error').textContent = '';
+  };
   for (const tab of appEl.querySelectorAll('.tab')) {
     tab.onclick = () => {
       mode = tab.dataset.tab;
       appEl.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-      $('#signup-extra').style.display = mode === 'signup' ? '' : 'none';
-      $('#a-submit').textContent = mode === 'signup' ? 'Create my shelf' : 'Log in';
-      $('#a-error').textContent = '';
+      applyMode();
     };
   }
+  $('#forgot-link').onclick = () => {
+    mode = mode === 'reset' ? 'login' : 'reset';
+    if (mode !== 'reset') appEl.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === 'login'));
+    applyMode();
+  };
   $('#auth-form').onsubmit = async (e) => {
     e.preventDefault();
     $('#a-error').textContent = '';
     try {
-      const body = { username: $('#a-username').value, password: $('#a-password').value };
-      if (mode === 'signup') body.displayName = $('#a-display').value;
-      const { user } = await api(mode === 'signup' ? '/signup' : '/login', { method: 'POST', body });
+      let user;
+      if (mode === 'reset') {
+        ({ user } = await api('/reset-password', {
+          method: 'POST',
+          body: { username: $('#a-username').value, code: $('#a-code').value, newPassword: $('#a-newpw').value },
+        }));
+        toast('Password reset — welcome back!');
+      } else {
+        const body = { username: $('#a-username').value, password: $('#a-password').value };
+        if (mode === 'signup') body.displayName = $('#a-display').value;
+        ({ user } = await api(mode === 'signup' ? '/signup' : '/login', { method: 'POST', body }));
+        if (mode === 'signup') toast('Welcome to Meeple Shelf!');
+      }
       state.user = user;
-      if (mode === 'signup') toast('Welcome to Meeple Shelf!');
       location.hash = '#/library';
     } catch (err) {
       $('#a-error').textContent = err.message;
@@ -399,13 +560,15 @@ const libState = { q: '', sort: 'recent' };
 async function viewLibrary() {
   const { entries } = await api('/library');
   const shareUrl = `${location.origin}/#/u/${state.user.shareSlug}`;
+  const owned = entries.filter((en) => en.status !== 'wish');
+  const wishes = entries.filter((en) => en.status === 'wish');
 
   appEl.innerHTML = `
   <div class="container">
     <div class="page-head">
       <div>
         <h1>My Shelf</h1>
-        <div class="sub">${entries.length} game${entries.length === 1 ? '' : 's'} on your shelf</div>
+        <div class="sub">${owned.length} game${owned.length === 1 ? '' : 's'} on your shelf${wishes.length ? ` · ${wishes.length} wished for` : ''}</div>
       </div>
       <button class="btn btn-primary" id="add-game-btn">+ Add a game</button>
     </div>
@@ -441,12 +604,26 @@ async function viewLibrary() {
   const byId = new Map(entries.map((en) => [String(en.id), en]));
   const openAdd = () => openAddModal();
 
+  const entryCard = (en) =>
+    gameCardHtml(en.game, {
+      entryId: en.id,
+      gameId: en.game.id,
+      notes: en.notes,
+      addedAt: en.addedAt,
+      actions: true,
+      loanedTo: en.loanedTo,
+      dueDate: en.dueDate,
+      gotIt: en.status === 'wish',
+      extraBadges: en.status === 'grabs' ? `<span class="badge grabs">${icon('gift')} up for grabs</span>` : '',
+    });
+
   function renderGrid() {
     const grid = $('#lib-grid');
     if (!grid) return;
-    let list = [...entries];
     const q = libState.q.trim().toLowerCase();
-    if (q) list = list.filter((en) => en.game.title.toLowerCase().includes(q));
+    const match = (en) => !q || en.game.title.toLowerCase().includes(q);
+    let list = owned.filter(match);
+    const wl = wishes.filter(match);
     if (libState.sort === 'title') list.sort((a, b) => a.game.title.localeCompare(b.game.title));
     else if (libState.sort === 'out') {
       // lent copies first, longest-out first (out_at ISO strings sort chronologically)
@@ -457,9 +634,14 @@ async function viewLibrary() {
           a.game.title.localeCompare(b.game.title)
       );
     }
-    grid.innerHTML = list.length
-      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, gameId: en.game.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo, dueDate: en.dueDate })).join('')}</div>`
-      : emptyState('search', 'No matches', 'No games on your shelf match that search.');
+    grid.innerHTML =
+      (list.length
+        ? `<div class="grid">${list.map(entryCard).join('')}</div>`
+        : emptyState('search', 'No matches', 'No games on your shelf match that search.')) +
+      (wl.length
+        ? `<h2 class="section-h">${icon('gift', 'accent')} Wishlist <span class="count">${wl.length}</span></h2>
+           <div class="grid">${wl.map(entryCard).join('')}</div>`
+        : '');
   }
   renderGrid();
 
@@ -487,7 +669,19 @@ async function viewLibrary() {
       }
       const card = e.target.closest('[data-entry]');
       const entry = byId.get(card.dataset.entry);
-      if (entry && btn.dataset.act === 'edit') openEditModal(entry);
+      if (!entry) return;
+      if (btn.dataset.act === 'edit') openEditModal(entry);
+      if (btn.dataset.act === 'gotit') {
+        btn.disabled = true;
+        try {
+          await api(`/library/${entry.id}`, { method: 'PATCH', body: { status: 'owned' } });
+          toast(`${entry.game.title} moved to your shelf — congrats!`);
+          route();
+        } catch (err) {
+          btn.disabled = false;
+          toast(err.message);
+        }
+      }
     });
   }
 }
@@ -507,6 +701,7 @@ async function openAddModal(ownersCtx = null) {
   }
   const showOwners = ownersCtx.members.length > 1;
   const selectedOwners = new Set([state.user.id]);
+  let addStatus = 'owned';
 
   openModal(`
     <div class="modal-head"><h2>Add a game</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
@@ -520,6 +715,11 @@ async function openAddModal(ownersCtx = null) {
         <span class="glabel">Whose shelf?</span>
         ${ownersCtx.members.map((m) => `<button class="chip-btn ${selectedOwners.has(m.id) ? 'active' : ''}" data-owner="${m.id}">${esc(m.displayName)}${m.id === state.user.id ? ' (me)' : ''}</button>`).join('')}
       </div>` : ''}
+      <div class="owner-pick" id="status-pick">
+        <span class="glabel">Add to</span>
+        <button class="chip-btn active" data-status="owned">${icon('dice')} Shelf</button>
+        <button class="chip-btn" data-status="wish">${icon('gift')} Wishlist</button>
+      </div>
       <div id="tab-search">
         <input type="text" id="game-q" placeholder="Start typing a game name…" autocomplete="off">
         <div class="search-results" id="game-results"></div>
@@ -612,10 +812,10 @@ async function openAddModal(ownersCtx = null) {
         const ownerIds = [...selectedOwners];
         const m = row.match;
         const body = m?.gameId
-          ? { gameId: m.gameId, ownerIds }
+          ? { gameId: m.gameId, ownerIds, status: addStatus }
           : m
-            ? { title: m.title, year: m.year, minPlayers: m.minPlayers, maxPlayers: m.maxPlayers, playTime: m.playTime, category: m.category, imageUrl: m.imageUrl, ownerIds }
-            : { title: row.line, ownerIds };
+            ? { title: m.title, year: m.year, minPlayers: m.minPlayers, maxPlayers: m.maxPlayers, playTime: m.playTime, category: m.category, imageUrl: m.imageUrl, ownerIds, status: addStatus }
+            : { title: row.line, ownerIds, status: addStatus };
         const { added } = await api('/library', { method: 'POST', body });
         added ? ok++ : dup++;
       } catch { /* keep going */ }
@@ -624,6 +824,13 @@ async function openAddModal(ownersCtx = null) {
     toast(`Added ${ok} game${ok === 1 ? '' : 's'}${dup ? ` · ${dup} already on the shelf` : ''}`);
     closeModal();
   };
+
+  $('#status-pick').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-status]');
+    if (!btn) return;
+    addStatus = btn.dataset.status;
+    $('#status-pick').querySelectorAll('.chip-btn').forEach((b) => b.classList.toggle('active', b === btn));
+  });
 
   if (showOwners) {
     $('#owner-pick').addEventListener('click', (e) => {
@@ -676,14 +883,16 @@ async function openAddModal(ownersCtx = null) {
     try {
       const ownerIds = [...selectedOwners];
       const body = r.gameId
-        ? { gameId: r.gameId, ownerIds }
-        : { title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers, playTime: r.playTime, category: r.category, imageUrl: r.imageUrl, ownerIds };
+        ? { gameId: r.gameId, ownerIds, status: addStatus }
+        : { title: r.title, year: r.year, minPlayers: r.minPlayers, maxPlayers: r.maxPlayers, playTime: r.playTime, category: r.category, imageUrl: r.imageUrl, ownerIds, status: addStatus };
       const { game, added, requested } = await api('/library', { method: 'POST', body });
       btn.textContent = added ? '✓ Added' : 'On shelf';
       btn.closest('.result-row').classList.add('added');
       if (added) {
         modalDirty = true;
-        toast(`${game.title} added to ${added === 1 ? (requested === 1 ? 'the shelf' : '1 shelf') : added + ' shelves'}`);
+        toast(addStatus === 'wish'
+          ? `${game.title} → wishlist`
+          : `${game.title} added to ${added === 1 ? (requested === 1 ? 'the shelf' : '1 shelf') : added + ' shelves'}`);
       } else {
         toast(`${game.title} is already on ${requested === 1 ? 'that shelf' : 'those shelves'}`);
       }
@@ -708,6 +917,7 @@ async function openAddModal(ownersCtx = null) {
       };
       ['year', 'minPlayers', 'maxPlayers', 'playTime'].forEach((k) => { if (body[k] != null) body[k] = Number(body[k]) || null; });
       body.ownerIds = [...selectedOwners];
+      body.status = addStatus;
       const { game, added } = await api('/library', { method: 'POST', body });
       modalDirty = true;
       toast(added ? `${game.title} added to ${added === 1 ? 'the shelf' : added + ' shelves'}` : `${game.title} was already there`);
@@ -740,6 +950,12 @@ async function openEditModal(entry) {
       <label>Category</label>
       <input type="text" id="e-category" list="cat-list" value="${esc(g.category || '')}" placeholder="e.g. Party Game…">
       ${catDatalist()}
+      <label>This copy is</label>
+      <select id="e-status" style="width:100%">
+        <option value="owned" ${(entry.status || 'owned') === 'owned' ? 'selected' : ''}>On my shelf</option>
+        <option value="wish" ${entry.status === 'wish' ? 'selected' : ''}>On my wishlist (don't own it yet)</option>
+        <option value="grabs" ${entry.status === 'grabs' ? 'selected' : ''}>Up for grabs (culling it — first dibs)</option>
+      </select>
       <label>Scoring</label>
       <select id="e-dir" style="width:100%">
         <option value="">Not set</option>
@@ -781,6 +997,14 @@ async function openEditModal(entry) {
       if (!e.target.value) $('#e-due').value = '';
     };
   }
+  // a wish isn't a physical copy: hide the loan controls while wish is selected
+  $('#e-status').onchange = (e) => {
+    if (!$('#e-loan')) return;
+    const showLoan = e.target.value !== 'wish';
+    $('#e-loan').style.display = showLoan ? '' : 'none';
+    $('#e-loan').previousElementSibling.style.display = showLoan ? '' : 'none'; // its "Currently at" label
+    if (!showLoan) { $('#e-loan').value = ''; $('#e-due-wrap').style.display = 'none'; $('#e-due').value = ''; }
+  };
   $('#e-save').onclick = async () => {
     try {
       await api(`/library/${entry.id}`, {
@@ -794,6 +1018,7 @@ async function openEditModal(entry) {
           playTime: $('#e-time').value || null,
           category: $('#e-category').value,
           scoreDir: $('#e-dir').value || null,
+          status: $('#e-status').value,
           ...($('#e-loan') ? { loanedTo: $('#e-loan').value || null, dueDate: $('#e-due').value || null } : {}),
         },
       });
@@ -888,13 +1113,15 @@ async function viewCrews() {
 
 // filters start open on desktop, tucked away on phones
 const filtersOpenDefault = !window.matchMedia('(max-width: 640px)').matches;
-const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false };
+const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false };
 
 async function viewCrewDetail(id) {
-  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false });
+  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false });
   const { crew, members, games } = await api('/crews/' + id);
   const multiOwned = games.filter((g) => g.owners.length > 1).length;
   const categories = [...new Set(games.map((g) => g.category).filter(Boolean))].sort();
+  const crewTags = [...new Set(games.flatMap((g) => g.tags || []))].sort();
+  let eventsCache = null; // nights view data, fetched on first visit
 
   appEl.innerHTML = `
   <div class="container">
@@ -929,6 +1156,7 @@ async function viewCrewDetail(id) {
       <div class="segmented">
         <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
         <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
+        <button data-view="nights" class="${crewState.view === 'nights' ? 'active' : ''}">${icon('calendar')}<span class="seg-txt"> Nights</span></button>
         <button data-view="stats" class="${crewState.view === 'stats' ? 'active' : ''}">${icon('trophy')}<span class="seg-txt"> Leaderboard</span></button>
       </div>
     </div>
@@ -961,6 +1189,10 @@ async function viewCrewDetail(id) {
           <option value="all">All</option>
           ${categories.map((c) => `<option value="${esc(c)}" ${crewState.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
         </select>
+      </div>` : ''}
+      ${crewTags.length ? `<div class="filter-group" id="tag-chips">
+        <span class="glabel">${icon('tag')}</span>
+        ${crewTags.map((t) => `<button class="chip-btn ${crewState.tag === t ? 'active' : ''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}
       </div>` : ''}
       <div class="filter-group">
         <span class="glabel">Show</span>
@@ -1011,6 +1243,9 @@ async function viewCrewDetail(id) {
     if (crewState.category !== 'all') {
       list = list.filter((g) => g.category === crewState.category);
     }
+    if (crewState.tag !== 'all') {
+      list = list.filter((g) => (g.tags || []).includes(crewState.tag));
+    }
     if (crewState.neverPlayed) {
       list = list.filter((g) => !g.playCount && !g.expansionOf && g.category !== 'Expansion for Base-game');
     }
@@ -1044,13 +1279,15 @@ async function viewCrewDetail(id) {
       (crewState.time !== 'any' ? 1 : 0) +
       (crewState.owner !== 'all' ? 1 : 0) +
       (crewState.category !== 'all' ? 1 : 0) +
+      (crewState.tag !== 'all' ? 1 : 0) +
       (crewState.neverPlayed ? 1 : 0) +
       (crewState.sort !== 'title' ? 1 : 0)
     );
   }
 
   function syncToolbar() {
-    const statsMode = crewState.view === 'stats';
+    // nights & stats are full-page views — the game search/filter bar steps aside
+    const statsMode = crewState.view === 'stats' || crewState.view === 'nights';
     for (const el of [$('#cw-q'), $('#cw-filtertoggle'), $('#surprise-btn')]) {
       el.style.display = statsMode ? 'none' : '';
     }
@@ -1067,10 +1304,11 @@ async function viewCrewDetail(id) {
     const container = $('#cw-games');
     const banner = $('#surprise-result');
     syncToolbar();
-    if (crewState.view === 'stats') {
+    if (crewState.view === 'stats' || crewState.view === 'nights') {
       banner.style.display = 'none';
       $('#cw-count').textContent = '';
-      renderStats(container);
+      if (crewState.view === 'stats') renderStats(container);
+      else renderNights(container);
       return;
     }
     if (banner.innerHTML) banner.style.display = '';
@@ -1082,13 +1320,17 @@ async function viewCrewDetail(id) {
     }
     if (crewState.view === 'grid') {
       const { top, exps } = groupExpansions(list);
+      const grabsBadge = (g) => {
+        const names = g.owners.filter((o) => o.grabs).map((o) => o.displayName);
+        return names.length ? `<span class="badge grabs" title="Being culled — ask ${esc(names.join(', '))} for first dibs">${icon('gift')} up for grabs</span>` : '';
+      };
       const cards = [];
       for (const g of top) {
         const kids = exps.get(g.id);
         const expanded = crewState.expanded.has(g.id);
-        cards.push(gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true, expansions: kids, expanded, playCount: g.playCount }));
+        cards.push(gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true, expansions: kids, expanded, playCount: g.playCount, extraBadges: grabsBadge(g) }));
         if (kids && expanded) {
-          for (const e of kids) cards.push(gameCardHtml(e, { owners: e.owners, gameId: e.id, editOwners: true, playCount: e.playCount }));
+          for (const e of kids) cards.push(gameCardHtml(e, { owners: e.owners, gameId: e.id, editOwners: true, playCount: e.playCount, extraBadges: grabsBadge(e) }));
         }
       }
       container.innerHTML = `<div class="grid">${cards.join('')}</div>`;
@@ -1142,6 +1384,15 @@ async function viewCrewDetail(id) {
     $('#cw-never').classList.toggle('active', crewState.neverPlayed);
     renderGames();
   };
+  if ($('#tag-chips')) {
+    $('#tag-chips').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tag]');
+      if (!btn) return;
+      crewState.tag = crewState.tag === btn.dataset.tag ? 'all' : btn.dataset.tag;
+      $('#tag-chips').querySelectorAll('.chip-btn').forEach((b) => b.classList.toggle('active', b.dataset.tag === crewState.tag));
+      renderGames();
+    });
+  }
   $('#cw-time').onchange = (e) => { crewState.time = e.target.value; renderGames(); };
   $('#cw-owner').onchange = (e) => { crewState.owner = e.target.value; renderGames(); };
   if ($('#cw-category')) $('#cw-category').onchange = (e) => { crewState.category = e.target.value; renderGames(); };
@@ -1176,7 +1427,7 @@ async function viewCrewDetail(id) {
     const card = e.target.closest('[data-game]');
     if (card && !clickedControl(e)) {
       const game = games.find((g) => g.id === Number(card.dataset.game));
-      openGameModal(Number(card.dataset.game), { owners: game?.owners, crewId: id });
+      openGameModal(Number(card.dataset.game), { owners: game?.owners, crewId: id, tags: game?.tags || [], allTags: crewTags });
     }
   });
 
@@ -1304,6 +1555,198 @@ async function viewCrewDetail(id) {
         route(); // full refresh so grid play counts / milestones don't go stale
       });
     }
+  }
+
+  // ---- game nights: propose a date, RSVP, vote on what to play ----
+  async function renderNights(container) {
+    container.innerHTML = `<div class="skel skel-line" style="width:34%;height:22px"></div><div class="skel skel-card" style="aspect-ratio:auto;height:180px;margin-top:14px"></div>`;
+    if (!eventsCache) {
+      try {
+        eventsCache = (await api(`/crews/${id}/events`)).events;
+      } catch (e) {
+        container.innerHTML = emptyState('alert', 'Hmm', esc(e.message));
+        return;
+      }
+    }
+    if (crewState.view !== 'nights') return; // switched away while loading
+    const today = localISODate();
+    const upcoming = eventsCache.filter((ev) => !ev.canceled && ev.date >= today);
+    const past = eventsCache.filter((ev) => ev.canceled || ev.date < today).slice(-6).reverse();
+
+    const rsvpBtn = (ev, kind, label, icn) =>
+      `<button class="chip-btn rsvp-${kind} ${ev.myRsvp === kind ? 'active' : ''}" data-rsvp="${kind}" data-ev="${ev.id}">${icon(icn)}<span class="seg-txt"> ${label}</span>${ev.rsvps[kind].length ? ` ${ev.rsvps[kind].length}` : ''}</button>`;
+
+    const eventCard = (ev) => {
+      const p = dateParts(ev.date);
+      const canEdit = ev.createdBy.id === state.user.id || ev.host?.id === state.user.id;
+      const isToday = ev.date === today;
+      return `
+      <div class="event-card${isToday ? ' tonight' : ''}" data-event="${ev.id}">
+        <div class="ev-date" aria-hidden="true"><span class="ev-dow">${esc(p.dow)}</span><span class="ev-day">${esc(p.day)}</span><span class="ev-mon">${esc(p.mon)}</span></div>
+        <div class="ev-body">
+          <div class="ev-title">${esc(ev.title)}${isToday ? ` <span class="badge milestone">tonight!</span>` : ''}
+            ${canEdit ? `<button class="icon-btn ev-edit" data-ev-edit="${ev.id}" title="Edit this night">${icon('pencil')}</button>` : ''}
+          </div>
+          <div class="r-meta">${[ev.time ? `${icon('clock')} ${esc(ev.time)}` : '', ev.host ? `${icon('home')} at the ${esc(ev.host.displayName)}'` : '', `planned by ${esc(ev.createdBy.displayName)}`].filter(Boolean).join(' · ')}</div>
+          ${ev.notes ? `<div class="card-notes">${esc(ev.notes)}</div>` : ''}
+          <div class="ev-rsvp">
+            ${rsvpBtn(ev, 'in', "I'm in", 'check')}${rsvpBtn(ev, 'maybe', 'Maybe', 'clock')}${rsvpBtn(ev, 'out', 'Out', 'x')}
+            ${ev.rsvps.in.length ? `<span class="ev-in-row">${ev.rsvps.in.map((u) => `<span class="avatar" title="${esc(u.displayName)}" style="--c:${memberColor(u.id)};background:${memberColor(u.id)}">${esc(u.displayName.slice(0, 2).toUpperCase())}</span>`).join('')}</span>` : ''}
+          </div>
+          <div class="ev-votes">
+            ${ev.votes.length ? ev.votes.map((v) => `
+              <div class="vote-row">
+                <button class="chip-btn vote ${v.mine ? 'active' : ''}" data-vote="${v.gameId}" data-ev="${ev.id}" title="${esc(v.voters.join(', '))}">${icon('check')} ${v.count}</button>
+                ${v.imageUrl ? `<img class="vote-thumb" loading="lazy" src="${esc(v.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+                <span class="vote-title">${esc(v.title)}</span>
+              </div>`).join('') : `<div class="r-meta">No games proposed yet — what should hit the table?</div>`}
+            <button class="chip-btn" data-suggest="${ev.id}">+ Suggest a game</button>
+            <div class="sg-wrap" data-sg="${ev.id}" style="display:none">
+              <input type="text" class="sg-q" placeholder="Search the crew's games…" autocomplete="off">
+              <div class="search-results sg-results"></div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    };
+
+    container.innerHTML = `
+      <div class="stats-head">
+        <div class="stats-blurb">${upcoming.length ? `${upcoming.length} night${upcoming.length === 1 ? '' : 's'} on the calendar` : 'Nothing on the calendar yet'}</div>
+        <button class="btn btn-primary" id="ev-new">${icon('calendar')} Plan a night</button>
+      </div>
+      ${upcoming.length
+        ? upcoming.map(eventCard).join('')
+        : emptyState('calendar', 'No game night planned', "Pick a date, see who's in, and vote on what hits the table.")}
+      ${past.length ? `
+      <h3 class="section-h" style="margin-top:26px">Past nights</h3>
+      <div class="search-results" style="max-height:none">
+        ${past.map((ev) => `
+        <div class="result-row" style="${ev.canceled ? 'opacity:.55' : ''}">
+          <div class="r-grow">
+            <div class="r-title">${esc(ev.title)} <span class="r-year">${fmtDay(ev.date)}</span>${ev.canceled ? ' <span class="badge">called off</span>' : ''}</div>
+            <div class="r-meta">${ev.rsvps.in.length ? `${ev.rsvps.in.length} in` : ''}${ev.votes.length ? ` · top vote: ${esc(ev.votes[0].title)}` : ''}</div>
+          </div>
+        </div>`).join('')}
+      </div>` : ''}`;
+
+    const patchCache = (event) => {
+      eventsCache = eventsCache.map((x) => (x.id === event.id ? event : x));
+      renderNights(container);
+    };
+    $('#ev-new').onclick = () => openEventModal();
+    // delegated once per container element — re-renders must not stack handlers
+    if (container.dataset.nightsWired) return;
+    container.dataset.nightsWired = '1';
+    container.addEventListener('click', async (e) => {
+      const rsvp = e.target.closest('[data-rsvp]');
+      if (rsvp) {
+        try {
+          const { event } = await api(`/events/${rsvp.dataset.ev}/rsvp`, { method: 'POST', body: { response: rsvp.dataset.rsvp } });
+          patchCache(event);
+        } catch (err) { toast(err.message); }
+        return;
+      }
+      const vote = e.target.closest('[data-vote]');
+      if (vote) {
+        try {
+          const { event } = await api(`/events/${vote.dataset.ev}/vote`, { method: 'POST', body: { gameId: Number(vote.dataset.vote) } });
+          patchCache(event);
+        } catch (err) { toast(err.message); }
+        return;
+      }
+      const sug = e.target.closest('[data-suggest]');
+      if (sug) {
+        const wrap = container.querySelector(`[data-sg="${sug.dataset.suggest}"]`);
+        wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+        if (wrap.style.display === '' && canAutoFocus) wrap.querySelector('.sg-q').focus();
+        return;
+      }
+      const edit = e.target.closest('[data-ev-edit]');
+      if (edit) openEventModal(eventsCache.find((x) => x.id === Number(edit.dataset.evEdit)));
+    });
+    container.addEventListener('input', (e) => {
+      const inp = e.target.closest('.sg-q');
+      if (!inp) return;
+      const wrap = inp.closest('.sg-wrap');
+      const evId = wrap.dataset.sg;
+      const q = inp.value.trim().toLowerCase();
+      const results = wrap.querySelector('.sg-results');
+      if (q.length < 2) { results.innerHTML = ''; return; }
+      const matches = games.filter((g) => g.title.toLowerCase().includes(q)).slice(0, 6);
+      results.innerHTML = matches.length
+        ? matches.map((g) => `
+          <div class="result-row" data-vote="${g.id}" data-ev="${evId}" style="cursor:pointer">
+            ${g.imageUrl ? `<img class="r-thumb" src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow"><div class="r-title">${esc(g.title)}</div></div>
+            <span class="badge">vote</span>
+          </div>`).join('')
+        : `<div class="search-hint">No crew game matches “${esc(inp.value)}”.</div>`;
+    });
+  }
+
+  function openEventModal(ev = null) {
+    const isEdit = !!ev;
+    openModal(`
+      <div class="modal-head"><h2>${isEdit ? 'Edit game night' : 'Plan game night'}</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
+      <div class="modal-body">
+        <label>What</label>
+        <input type="text" id="ev-title" maxlength="60" value="${esc(ev?.title || 'Game night')}">
+        <label>When</label>
+        <input type="date" id="ev-date" value="${esc(ev?.date || '')}">
+        <label>Time <span style="font-weight:400">(optional)</span></label>
+        <input type="time" id="ev-time" value="${esc(ev?.time || '')}">
+        <label>Where <span style="font-weight:400">(optional)</span></label>
+        <div class="owner-pick" id="ev-host" style="margin-bottom:2px">
+          ${members.map((m) => `<button class="chip-btn ${ev?.host?.id === m.id ? 'active' : ''}" data-host="${m.id}">${icon('home')} ${esc(m.displayName)}</button>`).join('')}
+        </div>
+        <label>Notes <span style="font-weight:400">(optional)</span></label>
+        <input type="text" id="ev-notes" value="${esc(ev?.notes || '')}" placeholder="e.g. bring snacks, doors at 6:30…">
+        <div class="form-error" id="ev-error"></div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="ev-save">${isEdit ? 'Save' : 'Plan it'}</button>
+          <button class="btn" id="ev-cancel">Cancel</button>
+          ${isEdit && !ev.canceled ? `<span class="nav-spacer"></span><button class="btn btn-ghost btn-danger" id="ev-off">Call it off</button>` : ''}
+        </div>
+      </div>`);
+    $('#ev-cancel').onclick = closeModal;
+    modalRoot.querySelector('#ev-host').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-host]');
+      if (!chip) return;
+      const was = chip.classList.contains('active');
+      modalRoot.querySelectorAll('#ev-host .chip-btn').forEach((b) => b.classList.remove('active'));
+      if (!was) chip.classList.add('active');
+    });
+    if ($('#ev-off')) {
+      $('#ev-off').onclick = async () => {
+        if (!window.confirm('Call off this game night?')) return;
+        try {
+          await api(`/events/${ev.id}`, { method: 'PATCH', body: { canceled: true } });
+          toast('Night called off');
+          modalDirty = true;
+          closeModal();
+        } catch (err) { $('#ev-error').textContent = err.message; }
+      };
+    }
+    $('#ev-save').onclick = async () => {
+      $('#ev-error').textContent = '';
+      const hostChip = modalRoot.querySelector('#ev-host .chip-btn.active');
+      const body = {
+        title: $('#ev-title').value,
+        date: $('#ev-date').value,
+        time: $('#ev-time').value || null,
+        hostId: hostChip ? Number(hostChip.dataset.host) : null,
+        notes: $('#ev-notes').value,
+      };
+      try {
+        await api(isEdit ? `/events/${ev.id}` : `/crews/${id}/events`, { method: isEdit ? 'PATCH' : 'POST', body });
+        toast(isEdit ? 'Night updated' : 'Game night planned — crew can RSVP now');
+        modalDirty = true;
+        closeModal();
+      } catch (err) {
+        $('#ev-error').textContent = err.message;
+      }
+    };
   }
 
   function openLogPlayModal(preGame = null) {
@@ -1551,7 +1994,7 @@ async function viewCrewDetail(id) {
 
   // swipe left/right anywhere in the games area to switch views
   {
-    const order = ['grid', 'matrix', 'stats'];
+    const order = ['grid', 'matrix', 'nights', 'stats'];
     let touchStart = null;
     const area = $('#cw-games');
     area.addEventListener('touchstart', (e) => {
@@ -1585,6 +2028,10 @@ async function viewCrewDetail(id) {
       <div class="modal-head"><h2>${esc(crew.name)}</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
       <div class="modal-body">
         <button class="btn btn-primary" id="menu-log" style="width:100%;justify-content:center">${icon('clipboard')} Log a play</button>
+        <button class="btn" id="menu-night" style="width:100%;justify-content:center;margin-top:10px">${icon('calendar')} Plan game night</button>
+        <button class="btn" id="menu-first" style="width:100%;justify-content:center;margin-top:10px">${icon('crown')} Who goes first?</button>
+        <button class="btn" id="menu-activity" style="width:100%;justify-content:center;margin-top:10px">${icon('activity')} Activity</button>
+        <button class="btn" id="menu-wishes" style="width:100%;justify-content:center;margin-top:10px">${icon('gift')} Gift ideas</button>
         <a class="btn" href="https://justinleedoyle.github.io/meeple-shelf/" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin-top:10px">${icon('globe')} Public page ${icon('external')}</a>
         <h3 style="font-size:12.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 8px">Invite code — friends join with this</h3>
         <div class="big-code" style="margin-top:0">${esc(crew.inviteCode)}</div>
@@ -1593,6 +2040,13 @@ async function viewCrewDetail(id) {
         <button class="btn btn-ghost btn-danger" id="leave-btn" style="width:100%;justify-content:center">Leave crew</button>
       </div>`);
     $('#menu-log').onclick = () => openLogPlayModal();
+    $('#menu-night').onclick = () => {
+      crewState.view = 'nights';
+      openEventModal();
+    };
+    $('#menu-first').onclick = () => openFirstPlayerModal(members);
+    $('#menu-activity').onclick = () => openActivityModal(id);
+    $('#menu-wishes').onclick = () => openWishlistsModal(id);
     $('#copy-code').onclick = () => copyText(crew.inviteCode);
     $('#leave-btn').onclick = async () => {
       if (!window.confirm(`Leave "${crew.name}"? If you're the last member, the crew is deleted.`)) return;
@@ -1661,11 +2115,78 @@ async function openGameModal(gameId, extras = {}) {
         <div class="r-meta" style="margin-bottom:6px">Borrowed ${loanData.total}×${loanData.loans[0] && !loanData.loans[0].returnedAt ? ` · currently with ${esc(loanData.loans[0].borrowerName)} (${daysOut(loanData.loans[0].outAt)} day${daysOut(loanData.loans[0].outAt) === 1 ? '' : 's'} out)` : ''}</div>
         ${loanData.loans.slice(0, 3).map((l) => `<div class="r-meta">• ${esc(l.borrowerName)} ← ${esc(l.ownerName)}, ${fmtDate(l.outAt)}${l.returnedAt ? ` → returned ${fmtDate(l.returnedAt)}` : ' (still out)'}</div>`).join('')}
       </div>` : ''}
+      ${extras.crewId ? `
+      <div class="gd-tags" id="gd-tags">
+        <span class="glabel">${icon('tag')}</span>
+        <span id="gd-tag-chips">${(extras.tags || []).map((t) => `<span class="tag-chip">${esc(t)}<button data-untag="${esc(t)}" title="Remove tag" aria-label="Remove ${esc(t)}">${icon('x')}</button></span>`).join('')}</span>
+        <input type="text" id="gd-tag-new" list="gd-tag-list" maxlength="24" placeholder="add a tag…">
+        <datalist id="gd-tag-list">${(extras.allTags || []).map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      </div>` : ''}
+      ${(() => {
+        if (!extras.crewId || !extras.owners?.length) return '';
+        if (extras.owners.some((o) => o.id === state.user.id)) return ''; // it's on your own shelf
+        const lendable = extras.owners.filter((o) => !o.loanedTo);
+        if (!lendable.length) return '';
+        return `<div class="gd-borrow" id="gd-borrow">
+          ${lendable.map((o) => `<button class="btn btn-sm" data-borrow="${o.id}">${icon('bell')} Ask ${esc(o.displayName)} to borrow</button>`).join('')}
+        </div>`;
+      })()}
       <div class="gd-links">
         ${game.websiteUrl ? `<a class="btn" href="${esc(game.websiteUrl)}" target="_blank" rel="noopener">Official site ${icon('external')}</a>` : ''}
         ${game.bggId ? `<a class="btn" href="https://boardgamegeek.com/boardgame/${game.bggId}" target="_blank" rel="noopener">BoardGameGeek ${icon('external')}</a>` : ''}
       </div>
     </div>`);
+
+  if ($('#gd-borrow')) {
+    $('#gd-borrow').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-borrow]');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        const { request } = await api(`/games/${gameId}/borrow-requests`, { method: 'POST', body: { ownerId: Number(btn.dataset.borrow) } });
+        btn.innerHTML = `${icon('check')} Asked ${esc(request.owner.displayName)}`;
+        toast(`Asked! ${request.owner.displayName} will see it under Account.`);
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message);
+      }
+    });
+  }
+  if ($('#gd-tags')) {
+    const renderChips = (tags) => {
+      $('#gd-tag-chips').innerHTML = tags.map((t) => `<span class="tag-chip">${esc(t)}<button data-untag="${esc(t)}" title="Remove tag" aria-label="Remove ${esc(t)}">${icon('x')}</button></span>`).join('');
+      modalDirty = true; // grid tag chips refresh on close
+    };
+    $('#gd-tag-new').addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const val = e.target.value.trim();
+      if (!val) return;
+      try {
+        const { tags } = await api(`/crews/${extras.crewId}/games/${gameId}/tags`, { method: 'POST', body: { tag: val } });
+        e.target.value = '';
+        renderChips(tags);
+      } catch (err) { toast(err.message); }
+    });
+    $('#gd-tag-new').addEventListener('change', async (e) => {
+      // datalist pick on mobile fires change without Enter
+      const val = e.target.value.trim();
+      if (!val) return;
+      try {
+        const { tags } = await api(`/crews/${extras.crewId}/games/${gameId}/tags`, { method: 'POST', body: { tag: val } });
+        e.target.value = '';
+        renderChips(tags);
+      } catch { /* keydown path already toasted, or invalid — leave the text for editing */ }
+    });
+    $('#gd-tags').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-untag]');
+      if (!btn) return;
+      try {
+        const { tags } = await api(`/crews/${extras.crewId}/games/${gameId}/tags/${encodeURIComponent(btn.dataset.untag)}`, { method: 'DELETE' });
+        renderChips(tags);
+      } catch (err) { toast(err.message); }
+    });
+  }
 }
 
 // GitHub-style activity heatmap from a sparse { 'YYYY-MM-DD': count } map.
@@ -1757,10 +2278,140 @@ function openOwnersModal(crew, game, members) {
   };
 }
 
+// crew activity feed: adds, wishes, loans, returns, plays, planned nights
+async function openActivityModal(crewId) {
+  openModal(`
+    <div class="modal-head"><h2>${icon('activity')} Activity</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
+    <div class="modal-body"><div class="skel skel-line"></div><div class="skel skel-line" style="width:80%"></div><div class="skel skel-line" style="width:65%"></div></div>`);
+  let activity;
+  try {
+    ({ activity } = await api(`/crews/${crewId}/activity`));
+  } catch (err) {
+    closeModal();
+    toast(err.message);
+    return;
+  }
+  if (!modalRoot.innerHTML) return;
+  const KIND = {
+    add: { icn: 'dice', line: (a) => `<strong>${esc(a.who)}</strong> added <strong>${esc(a.title)}</strong>` },
+    wish: { icn: 'gift', line: (a) => `<strong>${esc(a.who)}</strong> wished for <strong>${esc(a.title)}</strong>` },
+    loan: { icn: 'backpack', line: (a) => `<strong>${esc(a.who)}</strong> lent <strong>${esc(a.title)}</strong> to ${esc(a.extra)}` },
+    return: { icn: 'home', line: (a) => `<strong>${esc(a.extra)}</strong> returned <strong>${esc(a.title)}</strong> to ${esc(a.who)}` },
+    play: { icn: 'clipboard', line: (a) => `<strong>${esc(a.who)}</strong> logged a play of <strong>${esc(a.title)}</strong>${a.extra ? ` (${fmtDay(a.extra)})` : ''}` },
+    night: { icn: 'calendar', line: (a) => `<strong>${esc(a.who)}</strong> planned <strong>${esc(a.title)}</strong>${a.extra ? ` for ${fmtDay(a.extra)}` : ''}` },
+  };
+  openModal(`
+    <div class="modal-head"><h2>${icon('activity')} Activity</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
+    <div class="modal-body">
+      ${activity.length ? activity.map((a) => {
+        const k = KIND[a.kind] || KIND.add;
+        return `<div class="act-row"><span class="act-icn">${icon(k.icn)}</span><span class="act-txt">${k.line(a)}</span><span class="act-ago">${timeAgo(a.ts)}</span></div>`;
+      }).join('') : emptyState('activity', 'All quiet', 'Adds, loans, plays, and planned nights will show up here.')}
+    </div>`);
+}
+
+// every member's wishlist in one place — quietly useful before birthdays
+async function openWishlistsModal(crewId) {
+  openModal(`
+    <div class="modal-head"><h2>${icon('gift')} Gift ideas</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
+    <div class="modal-body"><div class="skel skel-line"></div><div class="skel skel-line" style="width:80%"></div></div>`);
+  let wishlists;
+  try {
+    ({ wishlists } = await api(`/crews/${crewId}/wishlists`));
+  } catch (err) {
+    closeModal();
+    toast(err.message);
+    return;
+  }
+  if (!modalRoot.innerHTML) return;
+  openModal(`
+    <div class="modal-head"><h2>${icon('gift')} Gift ideas</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
+    <div class="modal-body">
+      ${wishlists.length ? wishlists.map((w) => `
+        <h3 class="acct-h" style="margin-top:14px"><span class="avatar" style="--c:${memberColor(w.id)};background:${memberColor(w.id)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle">${esc(w.displayName.slice(0, 2).toUpperCase())}</span> ${esc(w.displayName)} wishes for</h3>
+        <div class="search-results" style="max-height:none">
+          ${w.items.map((it) => `
+          <div class="result-row">
+            ${it.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(it.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow"><div class="r-title">${esc(it.title)}${it.year ? `<span class="r-year">(${it.year})</span>` : ''}</div></div>
+          </div>`).join('')}
+        </div>`).join('') : emptyState('gift', 'No wishes yet', 'When crewmates add games to their wishlists, they show up here — perfect before birthdays.')}
+    </div>`);
+}
+
+// the tiny ritual-ender: tap go, the spinner picks who goes first
+function openFirstPlayerModal(members) {
+  const picked = new Set(members.map((m) => m.id));
+  let guests = [];
+  const namePool = () => [
+    ...members.filter((m) => picked.has(m.id)).map((m) => m.displayName),
+    ...guests,
+  ];
+  openModal(`
+    <div class="modal-head"><h2>${icon('crown')} Who goes first?</h2><button class="modal-close" aria-label="Close">${icon('x')}</button></div>
+    <div class="modal-body">
+      <div class="owner-pick" id="fp-pick">
+        ${members.map((m) => `<button class="chip-btn active" data-fp="${m.id}">${esc(m.displayName)}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <input type="text" id="fp-guest" placeholder="Add a guest…" maxlength="20" style="flex:1">
+        <button class="btn" id="fp-add">Add</button>
+      </div>
+      <div class="fp-stage" id="fp-stage">?</div>
+      <button class="btn btn-primary" id="fp-go" style="width:100%;justify-content:center">Spin</button>
+    </div>`);
+  $('#fp-pick').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-fp]');
+    if (!btn) return;
+    const mid = Number(btn.dataset.fp);
+    if (picked.has(mid)) picked.delete(mid);
+    else picked.add(mid);
+    btn.classList.toggle('active', picked.has(mid));
+  });
+  const addGuest = () => {
+    const name = $('#fp-guest').value.trim();
+    if (!name || guests.includes(name)) return;
+    guests.push(name);
+    $('#fp-guest').value = '';
+    $('#fp-pick').insertAdjacentHTML('beforeend', `<button class="chip-btn active" data-guest="${esc(name)}">${esc(name)}</button>`);
+  };
+  $('#fp-add').onclick = addGuest;
+  $('#fp-guest').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addGuest(); } });
+  $('#fp-pick').addEventListener('click', (e) => {
+    const g = e.target.closest('[data-guest]');
+    if (!g) return;
+    guests = guests.filter((n) => n !== g.dataset.guest);
+    g.remove();
+  });
+  let spinning = false;
+  $('#fp-go').onclick = () => {
+    if (spinning) return;
+    const pool = namePool();
+    if (pool.length < 2) return toast('Pick at least two players');
+    spinning = true;
+    const stage = $('#fp-stage');
+    stage.classList.remove('winner');
+    let i = 0;
+    const total = 18 + Math.floor(Math.random() * pool.length); // land on a random name
+    const tick = (n) => {
+      if (!modalRoot.innerHTML) return; // modal closed mid-spin
+      stage.textContent = pool[n % pool.length];
+      if (n >= total) {
+        stage.classList.add('winner');
+        stage.innerHTML = `${icon('crown', 'gold')} ${esc(pool[n % pool.length])}`;
+        spinning = false;
+        return;
+      }
+      setTimeout(() => tick(n + 1), 50 + Math.pow(n / total, 2) * 220); // ease out
+    };
+    tick(i);
+  };
+}
+
 // ===================== public shared shelf =====================
 
 async function viewPublicShelf(slug) {
-  const { owner, entries } = await api('/shared/' + slug);
+  const { owner, entries, wishlist = [] } = await api('/shared/' + slug);
   const isMine = state.user && state.user.shareSlug === slug;
   appEl.innerHTML = `
   <div class="container">
@@ -1768,22 +2419,27 @@ async function viewPublicShelf(slug) {
     <div class="page-head">
       <div>
         <h1>${icon('dice', 'accent')} ${esc(owner.displayName)}'s Shelf</h1>
-        <div class="sub">${entries.length} game${entries.length === 1 ? '' : 's'}</div>
+        <div class="sub">${entries.length} game${entries.length === 1 ? '' : 's'}${wishlist.length ? ` · ${wishlist.length} wished for` : ''}</div>
       </div>
     </div>
     ${entries.length
-      ? `<div class="grid" id="pub-grid">${entries.map((en) => gameCardHtml(en.game, { gameId: en.game.id, notes: en.notes })).join('')}</div>`
+      ? `<div class="grid" id="pub-grid">${entries.map((en) => gameCardHtml(en.game, { gameId: en.game.id, notes: en.notes, extraBadges: en.status === 'grabs' ? `<span class="badge grabs">${icon('gift')} up for grabs</span>` : '' })).join('')}</div>`
       : emptyState('dice', 'Nothing here yet', `${esc(owner.displayName)} hasn't added any games.`)}
+    ${wishlist.length ? `
+    <h2 class="section-h">${icon('gift', 'accent')} Wishlist <span class="count">${wishlist.length}</span></h2>
+    <div class="grid" id="pub-wishes">${wishlist.map((en) => gameCardHtml(en.game, { gameId: en.game.id })).join('')}</div>` : ''}
     <div class="public-footer">
       Shared with <strong>Meeple Shelf</strong> — your board game shelf, your friends' shelves, one combined library.
       ${state.user ? `<a href="#/library">Back to my shelf</a>` : `<a href="#/welcome">Make your own →</a>`}
     </div>
   </div>`;
-  if ($('#pub-grid')) {
-    $('#pub-grid').addEventListener('click', (e) => {
-      const card = e.target.closest('[data-game]');
-      if (card && !clickedControl(e)) openGameModal(Number(card.dataset.game));
-    });
+  for (const gridId of ['#pub-grid', '#pub-wishes']) {
+    if ($(gridId)) {
+      $(gridId).addEventListener('click', (e) => {
+        const card = e.target.closest('[data-game]');
+        if (card && !clickedControl(e)) openGameModal(Number(card.dataset.game));
+      });
+    }
   }
 }
 
@@ -1791,7 +2447,9 @@ async function viewPublicShelf(slug) {
 
 (async function boot() {
   try {
-    state.user = (await api('/me')).user;
+    const me = await api('/me');
+    state.user = me.user;
+    state.pending = me.pendingRequests || 0;
   } catch {
     state.user = null;
   }

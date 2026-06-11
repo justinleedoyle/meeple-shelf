@@ -1,0 +1,100 @@
+# Nightly safety net, two jobs in one:
+#   1. Off-machine database backup — checkpoints the WAL on the Fly machine,
+#      downloads /data/meeple-shelf.db, encrypts it (the file holds password
+#      hashes and this repo is public), and stores it as a workflow artifact
+#      for 30 days.
+#   2. Public page refresh — regenerates the shelf snapshot on the machine and,
+#      only if the library actually changed, commits it and re-dispatches the
+#      Pages build (bot pushes don't trigger `on: push` workflows by design).
+#
+# Secrets: FLY_API_TOKEN (scoped deploy token), BACKUP_PASSPHRASE (restore key —
+# see BACKUPS.md).
+
+name: Nightly backup & page refresh
+
+on:
+  schedule:
+    - cron: '17 9 * * *' # 02:17 Pacific
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: nightly
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP: meeple-shelf
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Wake the machine
+        run: |
+          MACHINE=$(flyctl machine list -a "$FLY_APP" -q | head -1)
+          flyctl machine start "$MACHINE" -a "$FLY_APP" || true
+          for i in $(seq 1 12); do
+            if flyctl ssh console -a "$FLY_APP" -C "true" 2>/dev/null; then
+              echo "machine is up"; exit 0
+            fi
+            echo "waiting for machine ($i)…"; sleep 5
+          done
+          echo "machine never came up" >&2; exit 1
+
+      - name: Checkpoint WAL + export snapshot on the machine
+        run: |
+          flyctl ssh console -a "$FLY_APP" -C "node /app/backup-prep.js"
+          flyctl ssh console -a "$FLY_APP" -C "node /app/export-snapshot.js"
+
+      - name: Download database + snapshot
+        run: |
+          flyctl ssh sftp get /data/meeple-shelf.db /tmp/meeple-shelf.db -a "$FLY_APP"
+          rm -f /tmp/shelf-snapshot.json
+          flyctl ssh sftp get /app/data/shelf-snapshot.json /tmp/shelf-snapshot.json -a "$FLY_APP"
+
+      - name: Encrypt backup
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -pass env:BACKUP_PASSPHRASE \
+            -in /tmp/meeple-shelf.db -out "meeple-shelf-$(date -u +%F).db.enc"
+          ls -la ./*.db.enc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: '*.db.enc'
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Commit refreshed snapshot (if the library changed)
+        id: snap
+        run: |
+          # the `generated` date bumps every run — ignore it when diffing so we
+          # only commit (and rebuild the page) on real content changes
+          if diff <(grep -v '"generated"' data/shelf-snapshot.json) \
+                  <(grep -v '"generated"' /tmp/shelf-snapshot.json) >/dev/null 2>&1; then
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            echo "snapshot unchanged — no commit"
+          else
+            mv /tmp/shelf-snapshot.json data/shelf-snapshot.json
+            git config user.name "meeple-shelf-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/shelf-snapshot.json
+            git commit -m "Nightly shelf snapshot refresh"
+            git push
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rebuild the public page
+        if: steps.snap.outputs.changed == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-pages.yml --ref main

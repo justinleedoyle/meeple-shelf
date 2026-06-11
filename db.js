@@ -94,6 +94,68 @@ CREATE TABLE IF NOT EXISTS loan_events (
 );
 CREATE INDEX IF NOT EXISTS idx_loan_events_open ON loan_events(owner_id, game_id);
 CREATE INDEX IF NOT EXISTS idx_plays_crew_game ON plays(crew_id, game_id);
+
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  crew_id INTEGER NOT NULL REFERENCES crews(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'Game night',
+  event_date TEXT NOT NULL,
+  start_time TEXT,
+  host_user_id INTEGER REFERENCES users(id),
+  notes TEXT NOT NULL DEFAULT '',
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  canceled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_crew ON events(crew_id, event_date);
+
+CREATE TABLE IF NOT EXISTS event_rsvps (
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  response TEXT NOT NULL CHECK (response IN ('in','maybe','out')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (event_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS event_votes (
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (event_id, game_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS borrow_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined','canceled')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_borrow_owner ON borrow_requests(owner_id, status);
+CREATE INDEX IF NOT EXISTS idx_borrow_requester ON borrow_requests(requester_id, status);
+
+CREATE TABLE IF NOT EXISTS reset_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS game_tags (
+  game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  crew_id INTEGER NOT NULL REFERENCES crews(id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id),
+  PRIMARY KEY (game_id, crew_id, tag)
+);
+CREATE INDEX IF NOT EXISTS idx_game_tags_crew ON game_tags(crew_id);
 `);
 
 // migrations for databases created before these columns existed
@@ -108,6 +170,7 @@ for (const ddl of [
   'ALTER TABLE games ADD COLUMN score_dir TEXT',
   'ALTER TABLE plays ADD COLUMN host_user_id INTEGER REFERENCES users(id)',
   'ALTER TABLE library_entries ADD COLUMN due_date TEXT',
+  "ALTER TABLE library_entries ADD COLUMN status TEXT NOT NULL DEFAULT 'owned'",
 ]) {
   try {
     db.exec(ddl);

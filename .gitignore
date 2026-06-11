@@ -5,3 +5,4 @@ data/*.db-wal
 data/*.db-shm
 site/
 .DS_Store
+.backup-passphrase
