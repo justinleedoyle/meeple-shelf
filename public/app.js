@@ -204,8 +204,8 @@ function renderNav(active) {
       <a class="nav-link ${active === 'crews' || active === 'crew' ? 'active' : ''}" href="#/crews">Crews</a>
     </div>
     <span class="nav-spacer"></span>
-    <button class="nav-user" id="account-btn" title="Account settings">Hi, ${esc(state.user.displayName)} ▾</button>
-    <button class="btn btn-ghost btn-sm" id="logout-btn">Log out</button>`;
+    <button class="nav-user" id="account-btn" title="Account settings">👤<span class="seg-txt"> ${esc(state.user.displayName)} ▾</span></button>
+    <button class="btn btn-ghost btn-sm seg-txt" id="logout-btn">Log out</button>`;
   $('#account-btn').onclick = openAccountModal;
   $('#logout-btn').onclick = async () => {
     await api('/logout', { method: 'POST' });
@@ -249,7 +249,15 @@ function openAccountModal() {
       <input type="password" id="p-new" autocomplete="new-password" placeholder="At least 6 characters">
       <div class="form-error" id="p-error"></div>
       <button class="btn btn-primary" id="p-save" style="margin-top:14px">Update password</button>
+      <hr style="border:none;border-top:1px solid var(--line);margin:20px 0">
+      <button class="btn" id="p-logout">Log out</button>
     </div>`);
+  $('#p-logout').onclick = async () => {
+    await api('/logout', { method: 'POST' });
+    state.user = null;
+    closeModal();
+    location.hash = '#/welcome';
+  };
   $('#p-save').onclick = async () => {
     $('#p-error').textContent = '';
     try {
@@ -782,10 +790,12 @@ async function viewCrews() {
 
 // ---------- crew detail: the combined library ----------
 
-const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set() };
+// filters start open on desktop, tucked away on phones
+const filtersOpenDefault = !window.matchMedia('(max-width: 640px)').matches;
+const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault };
 
 async function viewCrewDetail(id) {
-  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set() });
+  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault });
   const { crew, members, games } = await api('/crews/' + id);
   const multiOwned = games.filter((g) => g.owners.length > 1).length;
   const categories = [...new Set(games.map((g) => g.category).filter(Boolean))].sort();
@@ -795,14 +805,11 @@ async function viewCrewDetail(id) {
     <div class="page-head">
       <div>
         <h1>${esc(crew.name)}</h1>
-        <div class="sub" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:5px">
-          Invite code <span class="code-chip">${esc(crew.inviteCode)}</span>
-          <button class="btn btn-sm" id="copy-code">Copy</button>
-        </div>
+        <div class="sub">${games.length} games · ${members.length} shelves${multiOwned ? ` · ${multiOwned} shared` : ''}</div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center">
-        <button class="btn btn-primary" id="crew-add-btn">+ Add a game</button>
-        <button class="btn btn-ghost btn-danger btn-sm" id="leave-btn">Leave crew</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary" id="crew-add-btn">+ Add<span class="seg-txt"> a game</span></button>
+        <button class="btn" id="crew-menu-btn" title="Invite code & crew settings">⋯</button>
       </div>
     </div>
 
@@ -815,11 +822,19 @@ async function viewCrewDetail(id) {
         </span>`).join('')}
     </div>
 
-    <div class="stats-line">${games.length} unique game${games.length === 1 ? '' : 's'} across ${members.length} shel${members.length === 1 ? 'f' : 'ves'}${multiOwned ? ` · ${multiOwned} owned by more than one person` : ''}</div>
-
-    <div class="filter-bar" id="cw-filters">
-      <div id="cw-filterctl" style="display:contents">
+    <div class="filter-bar" id="cw-toolbar">
       <input type="text" class="search" id="cw-q" placeholder="Search games…" value="${esc(crewState.q)}">
+      <button class="chip-btn" id="cw-filtertoggle"></button>
+      <span class="nav-spacer"></span>
+      <button class="btn" id="surprise-btn">🎲<span class="seg-txt"> Surprise me</span></button>
+      <div class="segmented">
+        <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
+        <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
+        <button data-view="stats" class="${crewState.view === 'stats' ? 'active' : ''}">🏆<span class="seg-txt"> Leaderboard</span></button>
+      </div>
+    </div>
+
+    <div class="filter-bar" id="cw-filterctl" style="${crewState.filtersOpen ? '' : 'display:none'}">
       <div class="filter-group" id="players-chips">
         <span class="glabel">Players</span>
         ${['any', '2', '3', '4', '5', '6+'].map((p) => `<button class="chip-btn ${crewState.players === p ? 'active' : ''}" data-p="${p}">${p === 'any' ? 'Any' : p}</button>`).join('')}
@@ -854,14 +869,6 @@ async function viewCrewDetail(id) {
           <option value="title" ${crewState.sort === 'title' ? 'selected' : ''}>Title A–Z</option>
           <option value="owners" ${crewState.sort === 'owners' ? 'selected' : ''}>Most owners</option>
         </select>
-      </div>
-      <button class="btn" id="surprise-btn">🎲 Surprise me</button>
-      </div>
-      <span class="nav-spacer"></span>
-      <div class="segmented">
-        <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
-        <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
-        <button data-view="stats" class="${crewState.view === 'stats' ? 'active' : ''}">🏆 Leaderboard</button>
       </div>
     </div>
 
@@ -904,18 +911,38 @@ async function viewCrewDetail(id) {
     return list;
   }
 
+  function activeFilterCount() {
+    return (
+      (crewState.q.trim() ? 1 : 0) +
+      (crewState.players !== 'any' ? 1 : 0) +
+      (crewState.time !== 'any' ? 1 : 0) +
+      (crewState.owner !== 'all' ? 1 : 0) +
+      (crewState.category !== 'all' ? 1 : 0) +
+      (crewState.sort !== 'title' ? 1 : 0)
+    );
+  }
+
+  function syncToolbar() {
+    const statsMode = crewState.view === 'stats';
+    for (const el of [$('#cw-q'), $('#cw-filtertoggle'), $('#surprise-btn')]) {
+      el.style.display = statsMode ? 'none' : '';
+    }
+    $('#cw-filterctl').style.display = !statsMode && crewState.filtersOpen ? '' : 'none';
+    const n = activeFilterCount();
+    $('#cw-filtertoggle').textContent = `Filters${n ? ' · ' + n : ''} ${crewState.filtersOpen ? '▴' : '▾'}`;
+    $('#cw-filtertoggle').classList.toggle('active', n > 0);
+  }
+
   function renderGames() {
     const container = $('#cw-games');
     const banner = $('#surprise-result');
+    syncToolbar();
     if (crewState.view === 'stats') {
-      // hide the game filters but ALWAYS keep the view switcher visible
-      $('#cw-filterctl').style.display = 'none';
       banner.style.display = 'none';
       $('#cw-count').textContent = '';
       renderStats(container);
       return;
     }
-    $('#cw-filterctl').style.display = 'contents';
     if (banner.innerHTML) banner.style.display = '';
     const list = filtered();
     $('#cw-count').textContent = `${list.length} of ${games.length} games`;
@@ -966,6 +993,10 @@ async function viewCrewDetail(id) {
   }
   renderGames();
 
+  $('#cw-filtertoggle').onclick = () => {
+    crewState.filtersOpen = !crewState.filtersOpen;
+    syncToolbar();
+  };
   $('#cw-q').oninput = debounce((e) => { crewState.q = e.target.value; renderGames(); }, 150);
   $('#players-chips').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-p]');
@@ -1241,12 +1272,24 @@ async function viewCrewDetail(id) {
     }
   });
 
-  $('#copy-code').onclick = () => copyText(crew.inviteCode);
-  $('#leave-btn').onclick = async () => {
-    if (!window.confirm(`Leave "${crew.name}"? If you're the last member, the crew is deleted.`)) return;
-    await api(`/crews/${id}/leave`, { method: 'POST' });
-    toast(`Left ${crew.name}`);
-    location.hash = '#/crews';
+  $('#crew-menu-btn').onclick = () => {
+    openModal(`
+      <div class="modal-head"><h2>${esc(crew.name)}</h2><button class="modal-close">×</button></div>
+      <div class="modal-body">
+        <p style="color:var(--muted);font-size:14px">Friends join with this invite code:</p>
+        <div class="big-code">${esc(crew.inviteCode)}</div>
+        <button class="btn btn-primary" id="copy-code">Copy code</button>
+        <hr style="border:none;border-top:1px solid var(--line);margin:20px 0">
+        <button class="btn btn-ghost btn-danger" id="leave-btn">Leave crew</button>
+      </div>`);
+    $('#copy-code').onclick = () => copyText(crew.inviteCode);
+    $('#leave-btn').onclick = async () => {
+      if (!window.confirm(`Leave "${crew.name}"? If you're the last member, the crew is deleted.`)) return;
+      await api(`/crews/${id}/leave`, { method: 'POST' });
+      toast(`Left ${crew.name}`);
+      closeModal();
+      location.hash = '#/crews';
+    };
   };
 }
 

@@ -743,8 +743,10 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .page-head h1 { font-size: 22px; }
   .page-head { gap: 10px; }
   nav { padding: 10px 14px; gap: 10px; }
-  .nav-user { display: none; }
   .container { padding: 18px 14px 70px; }
+
+  /* hide verbose labels on small screens — icons carry the meaning */
+  .seg-txt { display: none; }
 
   /* 16px stops iOS Safari from auto-zooming focused inputs */
   input[type="text"], input[type="password"], input[type="number"], input[type="url"], input[type="date"], select, textarea { font-size: 16px; }
@@ -756,20 +758,27 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .icon-btn { width: 34px; height: 34px; }
 
   .filter-bar { gap: 8px; }
-  .filter-bar .search { max-width: none; flex-basis: 100%; }
-  .segmented { display: flex; width: 100%; }
-  .segmented button { flex: 1; padding: 9px; }
+  .filter-bar .search { max-width: none; flex: 1 1 110px; min-width: 0; }
+  .segmented button { padding: 9px 10px; }
 
   .share-bar { gap: 8px; }
-  .share-link { max-width: 100%; flex-basis: 100%; order: 5; }
+  .share-link { display: none; }
 
-  .members-row { gap: 7px; }
-  .member { padding: 4px 11px 4px 5px; }
+  .members-row {
+    gap: 7px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .members-row::-webkit-scrollbar { display: none; }
+  .member { flex: none; padding: 4px 11px 4px 5px; }
   .matrix th, .matrix td { padding: 8px 10px; font-size: 13px; }
   .big-code { font-size: 26px; letter-spacing: 5px; }
   .modal-backdrop { padding: 10px 8px; }
   .modal-body { padding: 12px 14px 16px; }
-  .modal-head { padding: 14px 14px 0; }
+  .modal-head { padding: 12px 12px 10px 16px; }
   .cover-letter { font-size: 48px; }
 }
 
