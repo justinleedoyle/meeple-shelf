@@ -216,3 +216,21 @@ Nothing — feature-complete as scoped.
 - Strongest converging signals: numeric scores/record book, Champion+Nemesis,
   shelf-of-shame + weighted Surprise, game-night events w/ voting, loan due
   dates, best-with-N-players filter (needs BGG token).
+
+## Phase 15: RIVALRY PACK + scores + loans — workflow-assisted build, DEPLOYED
+- Process: 4 spec agents (parallel, read live repo) → serial implementation →
+  4 adversarial reviewers → all findings fixed → 52/52 tests → deployed v14.
+- Shipped: play_players.score + games.score_dir (+lazy infer, edit-modal set),
+  plays.host_user_id, per-game Champion + per-household Nemesis (current-members
+  only), crew+household H-index, milestones 5/10/25 (badges/wall/toast), 52-week
+  heatmap, playCount/lastPlayedAt in crew payload (Never-played chip, Dustiest
+  sort, weighted Surprise 1/(1+n)), per-game crew stats endpoint, loan due_date +
+  loan_events journal (logLoanChange; backfill from added_at), overdue badges,
+  out-longest sorts, loan history endpoint (SQL-side visibility + real COUNT).
+- Review fixes of note: preserve-dont-wipe loan semantics (cross-crew/legacy
+  bodies), "(other crew)" select options, unchanged-loan validation bypass,
+  score rounding, future-date clamp, real-calendar dueDate validation, scoreDir
+  garbage guard, transactional PATCH/DELETE loans, public shared route strips
+  dueDate/loanedOutAt, .owner-row input[type=checkbox] CSS scoping (critical).
+- Declined 1 finding (heatmap back-swipe at right edge = correct edge-aware
+  behavior, symmetric with matrix). Prod smoke: log/verify/delete left 0 plays.
