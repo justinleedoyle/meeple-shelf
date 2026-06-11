@@ -306,6 +306,17 @@ select { width: auto; padding: 8px 10px; }
   border-color: color-mix(in srgb, var(--danger) 45%, transparent);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
+.badge.loan.overdue {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  font-weight: 700;
+}
+.badge.milestone {
+  color: var(--accent-bright);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
 .exp-line {
   display: block;
   margin-top: 8px;
@@ -622,7 +633,7 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 }
 .owner-row:hover { background: var(--card); }
 .owner-row .owner-main { display: flex; align-items: center; gap: 11px; flex: 1; cursor: pointer; min-width: 0; }
-.owner-row input { width: 17px; height: 17px; accent-color: var(--accent); }
+.owner-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
 .owner-row .m-name { font-weight: 700; font-size: 14px; }
 .owner-row select.loc { width: auto; max-width: 46%; font-size: 13px; padding: 6px 8px; }
 .owner-row select.loc:disabled { opacity: 0.35; }
@@ -652,6 +663,86 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   margin: 10px 0 4px;
 }
 .gd-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+/* score inputs in the log-play modal (hidden until the Scores toggle) */
+.owner-row input.lp-score {
+  display: none;
+  width: 76px;
+  height: auto;
+  flex: none;
+  text-align: right;
+  padding: 8px 10px;
+}
+#lp-players.show-scores .owner-row input.lp-score { display: block; }
+#lp-players.show-scores .lp-won-txt { display: none; }
+
+/* owners-modal due-date line (scoped: log-play rows must stay single-line) */
+#owner-rows .owner-row { flex-wrap: wrap; }
+.owner-row .due-wrap {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.owner-row .due-wrap input { flex: 1; padding: 7px 10px; }
+
+/* who-has-what loan chip */
+.matrix .m-loan {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.matrix .m-loan.overdue { color: var(--danger); }
+
+/* play heatmap */
+.hm-scroll { overflow-x: auto; padding: 4px 0; }
+.hm-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-columns: 11px;
+  gap: 3px;
+  width: max-content;
+}
+.hm-cell { width: 11px; height: 11px; border-radius: 2.5px; background: var(--card); }
+.hm-cell.l1 { background: color-mix(in srgb, var(--accent) 30%, var(--card)); }
+.hm-cell.l2 { background: color-mix(in srgb, var(--accent) 55%, var(--card)); }
+.hm-cell.l3 { background: color-mix(in srgb, var(--accent) 78%, var(--card)); }
+.hm-cell.l4 { background: var(--accent-bright); }
+
+/* nemesis line under a standings name */
+.nemesis-line { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+/* detail-modal stat tiles + loan history */
+.gd-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+.gd-tile {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+.gd-num { font-weight: 800; font-size: 15.5px; }
+.gd-lbl { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.gd-loans { margin: 12px 0 4px; }
+.gd-loans h3 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 6px;
+}
 
 /* leaderboard */
 .stats-head {

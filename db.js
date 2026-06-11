@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS play_players (
   won INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (play_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS loan_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  owner_id INTEGER NOT NULL REFERENCES users(id),
+  borrower_id INTEGER NOT NULL REFERENCES users(id),
+  out_at TEXT NOT NULL DEFAULT (datetime('now')),
+  returned_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_loan_events_open ON loan_events(owner_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_plays_crew_game ON plays(crew_id, game_id);
 `);
 
 // migrations for databases created before these columns existed
@@ -93,11 +104,43 @@ for (const ddl of [
   'ALTER TABLE games ADD COLUMN bgg_id INTEGER',
   'ALTER TABLE games ADD COLUMN description TEXT',
   'ALTER TABLE games ADD COLUMN website_url TEXT',
+  'ALTER TABLE play_players ADD COLUMN score INTEGER',
+  'ALTER TABLE games ADD COLUMN score_dir TEXT',
+  'ALTER TABLE plays ADD COLUMN host_user_id INTEGER REFERENCES users(id)',
+  'ALTER TABLE library_entries ADD COLUMN due_date TEXT',
 ]) {
   try {
     db.exec(ddl);
   } catch {
     /* column already exists */
+  }
+}
+
+// one-shot backfill: open a loan event for copies already lent out before the
+// loan-history feature existed (idempotent — no-op once loan_events has rows).
+// out_at uses the entry's added_at as the best available floor for "when".
+try {
+  db.exec(`
+  INSERT INTO loan_events (game_id, owner_id, borrower_id, out_at)
+  SELECT le.game_id, le.user_id, le.loaned_to, COALESCE(le.added_at, datetime('now'))
+  FROM library_entries le
+  WHERE le.loaned_to IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM loan_events);
+  `);
+} catch (e) {
+  console.error('loan_events backfill failed (continuing):', e.message);
+}
+
+// THE single loan_events writer: closes the open event and/or opens a new one
+// when a copy's borrower changes. null→B opens; A→null closes; A→B does both.
+// The close runs unconditionally so "at most one open event per (game, owner)"
+// self-heals even if the journal ever desyncs from loaned_to.
+export function logLoanChange(gameId, ownerId, prev, next) {
+  if ((prev ?? null) === (next ?? null)) return;
+  db.prepare("UPDATE loan_events SET returned_at = datetime('now') WHERE game_id = ? AND owner_id = ? AND returned_at IS NULL")
+    .run(gameId, ownerId);
+  if (next != null) {
+    db.prepare('INSERT INTO loan_events (game_id, owner_id, borrower_id) VALUES (?, ?, ?)').run(gameId, ownerId, next);
   }
 }
 
@@ -238,6 +281,7 @@ export function gameToJson(g) {
     imageUrl: g.image_url,
     bggId: g.bgg_id,
     websiteUrl: g.website_url,
+    scoreDir: g.score_dir,
   };
 }
 

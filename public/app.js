@@ -57,6 +57,37 @@ function fmtDate(s) {
   return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// date-only strings ('YYYY-MM-DD') — fmtDate would build an invalid date from these
+const fmtDay = (s) => {
+  const d = new Date(s + 'T00:00');
+  return isNaN(d) ? s : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+function localISODate() {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
+// loan badge for cards: plain when on time, alarmed when past due
+function loanBadge(loanedTo, dueDate) {
+  if (!loanedTo) return '';
+  const overdue = dueDate && dueDate < localISODate();
+  return `<span class="badge loan${overdue ? ' overdue' : ''}">📍 with ${esc(loanedTo.displayName)}${dueDate ? ` · due ${fmtDay(dueDate)}` : ''}</span>`;
+}
+
+const milestoneTier = (n) => (n >= 25 ? { label: '25+', n: 25 } : n >= 10 ? { label: '10+', n: 10 } : n >= 5 ? { label: '5+', n: 5 } : null);
+
+// weighted random: unplayed games surface most, heavily-played stay possible
+function weightedPick(pool) {
+  const weights = pool.map((g) => 1 / (1 + (g.playCount || 0)));
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
 function toast(msg) {
   const el = document.createElement('div');
   el.className = 'toast';
@@ -152,7 +183,7 @@ function expShortTitle(g) {
   return sep === -1 ? g.title : g.title.slice(sep + 3);
 }
 
-function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners, loanedTo, expansions, expanded } = {}) {
+function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, editOwners, loanedTo, dueDate, playCount, expansions, expanded } = {}) {
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   const players = fmtPlayers(game);
   const time = fmtTime(game);
@@ -175,10 +206,11 @@ function gameCardHtml(game, { entryId, gameId, notes, addedAt, owners, actions, 
         ${players ? `<span class="badge">${players}</span>` : ''}
         ${time ? `<span class="badge">${time}</span>` : ''}
         ${game.category ? `<span class="badge">${esc(game.category)}</span>` : ''}
-        ${loanedTo ? `<span class="badge loan">📍 with ${esc(loanedTo.displayName)}</span>` : ''}
+        ${(() => { const ms = milestoneTier(playCount || 0); return ms ? `<span class="badge milestone" title="${ms.n}+ crew plays">🎖 ${ms.label}</span>` : ''; })()}
+        ${loanBadge(loanedTo, dueDate)}
       </div>
       ${notes ? `<div class="card-notes">${esc(notes)}</div>` : ''}
-      ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}` : ''}</span>`).join('')}</div>` : ''}
+      ${owners ? `<div class="card-owners">${owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}${o.dueDate && o.dueDate < localISODate() ? ' ⏰' : ''}` : ''}</span>`).join('')}</div>` : ''}
       ${expansions?.length ? `<button class="exp-line" data-act="toggle-exp" title="${esc(expansions.map((e) => `${expShortTitle(e)} (${(e.owners || []).map((o) => o.displayName).join(', ')})`).join('\n'))}">＋ ${expansions.length} expansion${expansions.length > 1 ? 's' : ''} ${expanded ? '▾' : '▸'}</button>` : ''}
       ${addedAt ? `<div class="added-date">Added ${fmtDate(addedAt)}</div>` : ''}
     </div>
@@ -396,6 +428,7 @@ async function viewLibrary() {
         <select id="lib-sort">
           <option value="recent" ${libState.sort === 'recent' ? 'selected' : ''}>Recently added</option>
           <option value="title" ${libState.sort === 'title' ? 'selected' : ''}>Title A–Z</option>
+          <option value="out" ${libState.sort === 'out' ? 'selected' : ''}>Out longest</option>
         </select>
       </div>
     </div>
@@ -412,8 +445,17 @@ async function viewLibrary() {
     const q = libState.q.trim().toLowerCase();
     if (q) list = list.filter((en) => en.game.title.toLowerCase().includes(q));
     if (libState.sort === 'title') list.sort((a, b) => a.game.title.localeCompare(b.game.title));
+    else if (libState.sort === 'out') {
+      // lent copies first, longest-out first (out_at ISO strings sort chronologically)
+      list.sort(
+        (a, b) =>
+          (a.loanedOutAt ? 0 : 1) - (b.loanedOutAt ? 0 : 1) ||
+          String(a.loanedOutAt || '').localeCompare(String(b.loanedOutAt || '')) ||
+          a.game.title.localeCompare(b.game.title)
+      );
+    }
     grid.innerHTML = list.length
-      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, gameId: en.game.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo })).join('')}</div>`
+      ? `<div class="grid">${list.map((en) => gameCardHtml(en.game, { entryId: en.id, gameId: en.game.id, notes: en.notes, addedAt: en.addedAt, actions: true, loanedTo: en.loanedTo, dueDate: en.dueDate })).join('')}</div>`
       : emptyState('🔍', 'No matches', 'No games on your shelf match that search.');
   }
   renderGrid();
@@ -695,13 +737,25 @@ async function openEditModal(entry) {
       <label>Category</label>
       <input type="text" id="e-category" list="cat-list" value="${esc(g.category || '')}" placeholder="e.g. Party Game…">
       ${catDatalist()}
+      <label>Scoring</label>
+      <select id="e-dir" style="width:100%">
+        <option value="">Not set</option>
+        <option value="high" ${g.scoreDir === 'high' ? 'selected' : ''}>Highest score wins</option>
+        <option value="low" ${g.scoreDir === 'low' ? 'selected' : ''}>Lowest score wins</option>
+        <option value="coop" ${g.scoreDir === 'coop' ? 'selected' : ''}>Co-op (team score)</option>
+      </select>
       <label>Cover image URL</label>
       <input type="url" id="e-img" value="${esc(g.imageUrl || '')}" placeholder="https://…">
-      ${mates.length ? `<label>Currently at</label>
+      ${mates.length || entry.loanedTo ? `<label>Currently at</label>
       <select id="e-loan" style="width:100%">
         <option value="">Home</option>
+        ${entry.loanedTo && !mates.some((m) => m.id === entry.loanedTo.id) ? `<option value="${entry.loanedTo.id}" selected>with ${esc(entry.loanedTo.displayName)} (other crew)</option>` : ''}
         ${mates.map((m) => `<option value="${m.id}" ${entry.loanedTo?.id === m.id ? 'selected' : ''}>with ${esc(m.displayName)}</option>`).join('')}
-      </select>` : ''}
+      </select>
+      <div id="e-due-wrap" style="${entry.loanedTo ? '' : 'display:none'}">
+        <label>Due back <span style="font-weight:400">(optional)</span></label>
+        <input type="date" id="e-due" value="${esc(entry.dueDate || '')}">
+      </div>` : ''}
       <label>Notes <span style="font-weight:400">(visible on your public shelf)</span></label>
       <input type="text" id="e-notes" value="${esc(entry.notes)}" placeholder="e.g. sleeved, missing a token…">
       <div class="form-error" id="e-error"></div>
@@ -718,6 +772,12 @@ async function openEditModal(entry) {
     modalDirty = true;
     closeModal();
   };
+  if ($('#e-loan')) {
+    $('#e-loan').onchange = (e) => {
+      $('#e-due-wrap').style.display = e.target.value ? '' : 'none';
+      if (!e.target.value) $('#e-due').value = '';
+    };
+  }
   $('#e-save').onclick = async () => {
     try {
       await api(`/library/${entry.id}`, {
@@ -730,7 +790,8 @@ async function openEditModal(entry) {
           maxPlayers: $('#e-max').value || null,
           playTime: $('#e-time').value || null,
           category: $('#e-category').value,
-          ...($('#e-loan') ? { loanedTo: $('#e-loan').value || null } : {}),
+          scoreDir: $('#e-dir').value || null,
+          ...($('#e-loan') ? { loanedTo: $('#e-loan').value || null, dueDate: $('#e-due').value || null } : {}),
         },
       });
       modalDirty = true;
@@ -824,10 +885,10 @@ async function viewCrews() {
 
 // filters start open on desktop, tucked away on phones
 const filtersOpenDefault = !window.matchMedia('(max-width: 640px)').matches;
-const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault };
+const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false };
 
 async function viewCrewDetail(id) {
-  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault });
+  if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', sort: 'title', view: 'grid', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false });
   const { crew, members, games } = await api('/crews/' + id);
   const multiOwned = games.filter((g) => g.owners.length > 1).length;
   const categories = [...new Set(games.map((g) => g.category).filter(Boolean))].sort();
@@ -899,10 +960,16 @@ async function viewCrewDetail(id) {
         </select>
       </div>` : ''}
       <div class="filter-group">
+        <span class="glabel">Show</span>
+        <button class="chip-btn ${crewState.neverPlayed ? 'active' : ''}" id="cw-never">🕸️ Never played</button>
+      </div>
+      <div class="filter-group">
         <span class="glabel">Sort</span>
         <select id="cw-sort">
           <option value="title" ${crewState.sort === 'title' ? 'selected' : ''}>Title A–Z</option>
           <option value="owners" ${crewState.sort === 'owners' ? 'selected' : ''}>Most owners</option>
+          <option value="lastPlayed" ${crewState.sort === 'lastPlayed' ? 'selected' : ''}>Dustiest first</option>
+          <option value="out" ${crewState.sort === 'out' ? 'selected' : ''}>Out longest</option>
         </select>
       </div>
     </div>
@@ -941,8 +1008,29 @@ async function viewCrewDetail(id) {
     if (crewState.category !== 'all') {
       list = list.filter((g) => g.category === crewState.category);
     }
+    if (crewState.neverPlayed) {
+      list = list.filter((g) => !g.playCount && !g.expansionOf && g.category !== 'Expansion for Base-game');
+    }
+    const earliestOut = (g) => {
+      const outs = g.owners.filter((o) => o.loanedTo && o.loanedOutAt).map((o) => o.loanedOutAt);
+      return outs.length ? outs.sort()[0] : null;
+    };
     if (crewState.sort === 'owners') list.sort((a, b) => b.owners.length - a.owners.length || a.title.localeCompare(b.title));
-    else list.sort((a, b) => a.title.localeCompare(b.title));
+    else if (crewState.sort === 'lastPlayed') {
+      // dustiest first: never-played, then oldest lastPlayedAt
+      list.sort(
+        (a, b) =>
+          (a.lastPlayedAt ? 1 : 0) - (b.lastPlayedAt ? 1 : 0) ||
+          String(a.lastPlayedAt || '').localeCompare(String(b.lastPlayedAt || '')) ||
+          a.title.localeCompare(b.title)
+      );
+    } else if (crewState.sort === 'out') {
+      list.sort((a, b) => {
+        const ao = earliestOut(a);
+        const bo = earliestOut(b);
+        return (ao ? 0 : 1) - (bo ? 0 : 1) || String(ao || '').localeCompare(String(bo || '')) || a.title.localeCompare(b.title);
+      });
+    } else list.sort((a, b) => a.title.localeCompare(b.title));
     return list;
   }
 
@@ -953,6 +1041,7 @@ async function viewCrewDetail(id) {
       (crewState.time !== 'any' ? 1 : 0) +
       (crewState.owner !== 'all' ? 1 : 0) +
       (crewState.category !== 'all' ? 1 : 0) +
+      (crewState.neverPlayed ? 1 : 0) +
       (crewState.sort !== 'title' ? 1 : 0)
     );
   }
@@ -994,9 +1083,9 @@ async function viewCrewDetail(id) {
       for (const g of top) {
         const kids = exps.get(g.id);
         const expanded = crewState.expanded.has(g.id);
-        cards.push(gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true, expansions: kids, expanded }));
+        cards.push(gameCardHtml(g, { owners: g.owners, gameId: g.id, editOwners: true, expansions: kids, expanded, playCount: g.playCount }));
         if (kids && expanded) {
-          for (const e of kids) cards.push(gameCardHtml(e, { owners: e.owners, gameId: e.id, editOwners: true }));
+          for (const e of kids) cards.push(gameCardHtml(e, { owners: e.owners, gameId: e.id, editOwners: true, playCount: e.playCount }));
         }
       }
       container.innerHTML = `<div class="grid">${cards.join('')}</div>`;
@@ -1020,8 +1109,10 @@ async function viewCrewDetail(id) {
             return `<tr>
             <td>${isExp ? '<span class="exp-arrow">↳ </span>' : ''}<span class="g-title">${esc(isExp ? expShortTitle(g) : g.title)}</span>${fmtPlayers(g) ? `<span class="g-meta">${fmtPlayers(g)}</span>` : ''}</td>
             ${members.map((m) => {
-              const owns = g.owners.some((o) => o.id === m.id);
-              return `<td>${owns ? `<span class="check" style="color:${memberColor(m.id)}">✓</span>` : ''}</td>`;
+              const o = g.owners.find((x) => x.id === m.id);
+              if (!o) return '<td></td>';
+              const overdue = o.dueDate && o.dueDate < localISODate();
+              return `<td><span class="check" style="color:${memberColor(m.id)}">✓</span>${o.loanedTo ? `<span class="m-loan${overdue ? ' overdue' : ''}" title="with ${esc(o.loanedTo.displayName)}${o.dueDate ? ' · due ' + fmtDay(o.dueDate) : ''}">→${esc(o.loanedTo.displayName.slice(0, 2).toUpperCase())}${overdue ? '⏰' : ''}</span>` : ''}</td>`;
             }).join('')}
           </tr>`;
           }).join('')}
@@ -1043,6 +1134,11 @@ async function viewCrewDetail(id) {
     $('#players-chips').querySelectorAll('.chip-btn').forEach((b) => b.classList.toggle('active', b === btn));
     renderGames();
   });
+  $('#cw-never').onclick = () => {
+    crewState.neverPlayed = !crewState.neverPlayed;
+    $('#cw-never').classList.toggle('active', crewState.neverPlayed);
+    renderGames();
+  };
   $('#cw-time').onchange = (e) => { crewState.time = e.target.value; renderGames(); };
   $('#cw-owner').onchange = (e) => { crewState.owner = e.target.value; renderGames(); };
   if ($('#cw-category')) $('#cw-category').onchange = (e) => { crewState.category = e.target.value; renderGames(); };
@@ -1077,16 +1173,11 @@ async function viewCrewDetail(id) {
     const card = e.target.closest('[data-game]');
     if (card && !clickedControl(e)) {
       const game = games.find((g) => g.id === Number(card.dataset.game));
-      openGameModal(Number(card.dataset.game), { owners: game?.owners });
+      openGameModal(Number(card.dataset.game), { owners: game?.owners, crewId: id });
     }
   });
 
   // ---- leaderboard ----
-  const fmtDay = (s) => {
-    const d = new Date(s + 'T00:00');
-    return isNaN(d) ? s : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  };
-
   async function renderStats(container) {
     container.innerHTML = `<div class="skel skel-line" style="width:34%;height:22px"></div><div class="skel skel-card" style="aspect-ratio:auto;height:200px;margin-top:14px"></div><div class="skel skel-line" style="width:50%;margin-top:18px"></div>`;
     let plays, stats;
@@ -1099,9 +1190,10 @@ async function viewCrewDetail(id) {
     if (crewState.view !== 'stats') return; // user switched away while loading
 
     const medals = ['🥇', '🥈', '🥉'];
+    const tierChip = (t) => (t ? `<span class="badge milestone">🎖 ${t === 'quarter' ? '25+' : t === 'dime' ? '10+' : '5+'}</span>` : '');
     container.innerHTML = `
       <div class="stats-head">
-        <div class="stats-blurb">${stats.totalPlays} play${stats.totalPlays === 1 ? '' : 's'} logged</div>
+        <div class="stats-blurb">${stats.totalPlays} play${stats.totalPlays === 1 ? '' : 's'} · ${stats.distinctGames || 0} game${stats.distinctGames === 1 ? '' : 's'} · crew H-index <strong>${stats.hIndex || 0}</strong></div>
         <button class="btn btn-primary" id="log-play-btn">📝 Log a play</button>
       </div>
 
@@ -1109,17 +1201,58 @@ async function viewCrewDetail(id) {
       <div class="stats-section">
         <h3>Standings</h3>
         <div class="matrix-wrap"><table class="matrix">
-          <thead><tr><th style="text-align:left">Household</th><th>Plays</th><th>Wins</th><th>Win %</th></tr></thead>
+          <thead><tr><th style="text-align:left">Household</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="H-index">H</th><th title="Plays hosted">🏠</th></tr></thead>
           <tbody>
             ${stats.standings.map((s, i) => `<tr>
-              <td><span class="medal">${s.wins > 0 && i < 3 ? medals[i] : ''}</span> <span class="avatar" style="--c:${memberColor(s.id)};background:${memberColor(s.id)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle">${esc(s.displayName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.displayName)}</span></td>
+              <td>
+                <span class="medal">${s.wins > 0 && i < 3 ? medals[i] : ''}</span> <span class="avatar" style="--c:${memberColor(s.id)};background:${memberColor(s.id)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle">${esc(s.displayName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.displayName)}</span>
+                ${s.nemesis ? `<div class="nemesis-line">⚔️ nemesis: ${esc(s.nemesis.displayName)} (${s.nemesis.losses})</div>` : ''}
+              </td>
               <td>${s.plays}</td>
               <td>${s.wins}</td>
               <td>${s.plays ? s.winRate + '%' : '—'}</td>
+              <td>${s.hIndex || '—'}</td>
+              <td>${s.hosted || '—'}</td>
             </tr>`).join('')}
           </tbody>
         </table></div>
       </div>
+
+      <div class="stats-section">
+        <h3>Play activity — last 52 weeks</h3>
+        <div class="hm-scroll">${heatmapHtml(stats.heatmap || {})}</div>
+      </div>
+
+      ${stats.records?.length ? `
+      <div class="stats-section">
+        <h3>Record book</h3>
+        <div class="search-results" style="max-height:none">
+          ${stats.records.map((r) => `
+          <div class="result-row">
+            ${r.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(r.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow">
+              <div class="r-title">${esc(r.title)}</div>
+              <div class="r-meta">🏆 ${r.best.score}${r.scoreDir === 'low' ? ' (low wins)' : ''} — ${esc(r.best.displayName)}, ${fmtDay(r.best.playedAt)} · avg ${r.avg} · ${r.scoredPlays} scored</div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      ${stats.milestones?.length ? `
+      <div class="stats-section">
+        <h3>Milestone wall</h3>
+        <div class="search-results" style="max-height:none">
+          ${stats.milestones.map((m) => `
+          <div class="result-row">
+            ${m.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(m.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+            <div class="r-grow">
+              <div class="r-title">${esc(m.title)}</div>
+              <div class="r-meta">${m.plays} plays${m.champion ? ` · 👑 ${esc(m.champion.displayName)} (${m.champion.wins})` : ''}</div>
+            </div>
+            ${tierChip(m.tier)}
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
 
       <div class="stats-section">
         <h3>Most played</h3>
@@ -1127,7 +1260,11 @@ async function viewCrewDetail(id) {
           ${stats.topGames.map((g) => `
           <div class="result-row">
             ${g.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(g.imageUrl)}" alt="" onerror="this.remove()">` : ''}
-            <div class="r-grow"><div class="r-title">${esc(g.title)}</div></div>
+            <div class="r-grow">
+              <div class="r-title">${esc(g.title)}</div>
+              ${g.champion ? `<div class="r-meta">👑 ${esc(g.champion.displayName)} (${g.champion.wins} win${g.champion.wins === 1 ? '' : 's'})</div>` : ''}
+            </div>
+            ${tierChip(g.badge)}
             <span class="badge">${g.plays} play${g.plays === 1 ? '' : 's'}</span>
           </div>`).join('')}
         </div>
@@ -1140,8 +1277,8 @@ async function viewCrewDetail(id) {
           <div class="result-row" data-play="${p.id}">
             ${p.game.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(p.game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
-              <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}</span></div>
-              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? '👑 ' : ''}${esc(pl.displayName)}</span>`).join('')}</div>
+              <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}${p.host ? ` · 🏠 ${esc(p.host.displayName)}` : ''}</span></div>
+              <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? '👑 ' : ''}${esc(pl.displayName)}${pl.score != null ? ` · ${pl.score}` : ''}</span>`).join('')}</div>
               ${p.notes ? `<div class="card-notes">${esc(p.notes)}</div>` : ''}
             </div>
             <button class="icon-btn danger" data-del-play="${p.id}" title="Delete this play">✕</button>
@@ -1149,6 +1286,9 @@ async function viewCrewDetail(id) {
         </div>
       </div>`}
     `;
+
+    const hs = container.querySelector('.hm-scroll');
+    if (hs) hs.scrollLeft = hs.scrollWidth; // most recent weeks first on phones
 
     $('#log-play-btn').onclick = () => openLogPlayModal();
     if ($('#play-feed')) {
@@ -1158,7 +1298,7 @@ async function viewCrewDetail(id) {
         if (!window.confirm('Delete this play?')) return;
         await api(`/crews/${id}/plays/${btn.dataset.delPlay}`, { method: 'DELETE' });
         toast('Play deleted');
-        renderGames();
+        route(); // full refresh so grid play counts / milestones don't go stale
       });
     }
   }
@@ -1174,8 +1314,15 @@ async function viewCrewDetail(id) {
         <label>Game</label>
         <div id="lp-game-area"></div>
         <label>When</label>
-        <input type="date" id="lp-date" value="${localDate}">
-        <label>Who played? <span style="font-weight:400">(tap 👑 for the winners — everyone for a co-op win)</span></label>
+        <input type="date" id="lp-date" value="${localDate}" max="${localDate}">
+        <label>Hosted at <span style="font-weight:400">(optional)</span></label>
+        <div class="owner-pick" id="lp-host" style="margin-bottom:2px">
+          ${members.map((m) => `<button class="chip-btn" data-host="${m.id}">🏠 ${esc(m.displayName)}</button>`).join('')}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="margin-top:14px">Who played? <span style="font-weight:400">(tap 👑 for winners)</span></label>
+          <button class="chip-btn" id="lp-scores-toggle" style="margin-left:auto">🔢 Scores</button>
+        </div>
         <div id="lp-players">
           ${members.map((m) => `
           <div class="owner-row" style="--c:${memberColor(m.id)}">
@@ -1184,7 +1331,8 @@ async function viewCrewDetail(id) {
               <span class="avatar">${esc(m.displayName.slice(0, 2).toUpperCase())}</span>
               <span class="m-name">${esc(m.displayName)}</span>
             </label>
-            <button class="chip-btn lp-won" data-won="${m.id}" disabled>👑 Won</button>
+            <input type="number" class="lp-score" data-score="${m.id}" step="1" placeholder="pts" aria-label="${esc(m.displayName)} score">
+            <button class="chip-btn lp-won" data-won="${m.id}" disabled>👑<span class="lp-won-txt"> Won</span></button>
           </div>`).join('')}
         </div>
         <label>Notes <span style="font-weight:400">(optional)</span></label>
@@ -1230,6 +1378,7 @@ async function viewCrewDetail(id) {
           if (!row) return;
           selectedGame = games.find((g) => g.id === Number(row.dataset.pick));
           renderGameArea();
+          suggestCrowns(); // re-evaluate winners under the picked game's scoring direction
         });
         if (canAutoFocus) $('#lp-q').focus();
       }
@@ -1243,27 +1392,86 @@ async function viewCrewDetail(id) {
         if (!cb.checked) won.classList.remove('active');
       };
     }
+    let crownsTouched = false;
     modalRoot.querySelector('#lp-players').addEventListener('click', (e) => {
       const btn = e.target.closest('.lp-won');
       if (!btn || btn.disabled) return;
+      crownsTouched = true;
       btn.classList.toggle('active');
+    });
+
+    // scores: hidden until toggled; typing a score auto-checks that household
+    // and (until crowns are touched) auto-suggests the winner from the scores
+    $('#lp-scores-toggle').onclick = () => {
+      modalRoot.querySelector('#lp-players').classList.toggle('show-scores');
+      $('#lp-scores-toggle').classList.toggle('active');
+    };
+    function suggestCrowns() {
+      if (crownsTouched) return;
+      const dir = selectedGame?.scoreDir || 'high';
+      if (dir === 'coop') {
+        // co-op: clear any score-based auto-crowns (the team wins together or not at all)
+        for (const btn of modalRoot.querySelectorAll('.lp-won')) btn.classList.remove('active');
+        return;
+      }
+      const rows = [...modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')]
+        .map((cb) => {
+          const v = modalRoot.querySelector(`.lp-score[data-score="${cb.value}"]`).value;
+          return { id: cb.value, score: v === '' ? null : Number(v) };
+        })
+        .filter((r) => r.score != null && Number.isFinite(r.score));
+      if (rows.length < 2) return;
+      const best = dir === 'low' ? Math.min(...rows.map((r) => r.score)) : Math.max(...rows.map((r) => r.score));
+      for (const btn of modalRoot.querySelectorAll('.lp-won')) {
+        const row = rows.find((r) => r.id === btn.dataset.won);
+        if (!btn.disabled || row) btn.classList.toggle('active', !!row && row.score === best);
+      }
+    }
+    modalRoot.querySelector('#lp-players').addEventListener('input', (e) => {
+      const inp = e.target.closest('.lp-score');
+      if (!inp) return;
+      const cb = modalRoot.querySelector(`#lp-players input[type="checkbox"][value="${inp.dataset.score}"]`);
+      if (inp.value !== '' && !cb.checked) {
+        cb.checked = true;
+        cb.onchange();
+      }
+      suggestCrowns();
+    });
+
+    // host: single-select chips
+    modalRoot.querySelector('#lp-host').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-host]');
+      if (!chip) return;
+      const was = chip.classList.contains('active');
+      modalRoot.querySelectorAll('#lp-host .chip-btn').forEach((b) => b.classList.remove('active'));
+      if (!was) chip.classList.add('active');
     });
 
     $('#lp-save').onclick = async () => {
       $('#lp-error').textContent = '';
       if (!selectedGame) { $('#lp-error').textContent = 'Pick the game you played'; return; }
-      const players = [...modalRoot.querySelectorAll('#lp-players input:checked')].map((cb) => ({
-        id: Number(cb.value),
-        won: modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`).classList.contains('active'),
-      }));
+      const players = [...modalRoot.querySelectorAll('#lp-players input[type="checkbox"]:checked')].map((cb) => {
+        const sv = modalRoot.querySelector(`.lp-score[data-score="${cb.value}"]`).value;
+        const n = sv === '' ? null : Number(sv);
+        return {
+          id: Number(cb.value),
+          won: modalRoot.querySelector(`.lp-won[data-won="${cb.value}"]`).classList.contains('active'),
+          score: n != null && Number.isFinite(n) ? Math.round(n) : null,
+        };
+      });
       if (!players.length) { $('#lp-error').textContent = 'Pick who played'; return; }
+      const hostChip = modalRoot.querySelector('#lp-host .chip-btn.active');
       try {
-        await api(`/crews/${id}/plays`, {
+        const { milestone } = await api(`/crews/${id}/plays`, {
           method: 'POST',
-          body: { gameId: selectedGame.id, playedAt: $('#lp-date').value, players, notes: $('#lp-notes').value },
+          body: { gameId: selectedGame.id, playedAt: $('#lp-date').value, players, notes: $('#lp-notes').value, hostId: hostChip ? Number(hostChip.dataset.host) : null },
         });
         const winners = players.filter((p) => p.won);
         toast(winners.length ? `🏆 Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => members.find((m) => m.id === w.id)?.displayName).join(', ')}` : `Logged ${selectedGame.title}`);
+        if (milestone) {
+          const n = milestone === 'quarter' ? 25 : milestone === 'dime' ? 10 : 5;
+          setTimeout(() => toast(`🎖 ${selectedGame.title} just hit ${n} crew plays!`), 1200);
+        }
         crewState.view = 'stats';
         modalDirty = true;
         closeModal();
@@ -1293,8 +1501,9 @@ async function viewCrewDetail(id) {
     const banner = $('#surprise-result');
     banner.style.display = '';
     let spins = 0;
+    const winner = weightedPick(pool); // dusty games surface more often
     const itv = setInterval(() => {
-      const g = pool[Math.floor(Math.random() * pool.length)];
+      const g = spins >= 14 ? winner : pool[Math.floor(Math.random() * pool.length)];
       banner.innerHTML = surpriseHtml(g, spins >= 14);
       if (spins >= 14) lastRoll = g;
       if (spins++ >= 14) clearInterval(itv);
@@ -1352,8 +1561,8 @@ async function viewCrewDetail(id) {
       const dx = e.changedTouches[0].clientX - start.x;
       const dy = e.changedTouches[0].clientY - start.y;
       if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
-      // inside the who-has-what table, only switch views from its scroll edges
-      const wrap = start.target.closest?.('.matrix-wrap');
+      // inside horizontally-scrolling widgets, only switch views from their scroll edges
+      const wrap = start.target.closest?.('.matrix-wrap, .hm-scroll');
       if (wrap) {
         const max = wrap.scrollWidth - wrap.clientWidth;
         if (dx < 0 && wrap.scrollLeft < max - 4) return;
@@ -1402,15 +1611,21 @@ async function openGameModal(gameId, extras = {}) {
       <div style="flex:1"><div class="skel skel-line" style="width:70%"></div><div class="skel skel-line" style="width:45%"></div></div></div>
       <div class="skel skel-line"></div><div class="skel skel-line" style="width:85%"></div><div class="skel skel-line" style="width:60%"></div>
     </div>`);
-  let game;
+  const statsP = extras.crewId
+    ? api(`/crews/${extras.crewId}/games/${gameId}/stats`).then((r) => r.stats).catch(() => null)
+    : Promise.resolve(null);
+  const loansP = state.user ? api(`/games/${gameId}/loans`).catch(() => null) : Promise.resolve(null);
+  let game, gstats, loanData;
   try {
     ({ game } = await api('/games/' + gameId));
+    [gstats, loanData] = await Promise.all([statsP, loansP]);
   } catch (err) {
     closeModal();
     toast(err.message);
     return;
   }
   if (!modalRoot.innerHTML) return; // user closed the skeleton before data arrived
+  const daysOut = (outAt) => Math.max(0, Math.floor((Date.now() - Date.parse(outAt.replace(' ', 'T') + 'Z')) / 86400000));
   const grad = COVER_GRADS[hashStr(game.title) % COVER_GRADS.length];
   openModal(`
     <div class="modal-head"><h2>${esc(game.title)}${game.year ? ` <span style="color:var(--faint);font-weight:400">(${game.year})</span>` : ''}</h2><button class="modal-close">×</button></div>
@@ -1428,12 +1643,46 @@ async function openGameModal(gameId, extras = {}) {
           ${extras.owners?.length ? `<div class="card-owners" style="margin-top:10px">${extras.owners.map((o) => `<span class="owner-chip" style="--c:${memberColor(o.id)}">${esc(o.displayName)}${o.loanedTo ? ` → ${esc(o.loanedTo.displayName)}` : ''}</span>`).join('')}</div>` : ''}
         </div>
       </div>
+      ${gstats?.plays ? `
+      <div class="gd-stats">
+        <div class="gd-tile"><div class="gd-num">${gstats.plays}</div><div class="gd-lbl">play${gstats.plays === 1 ? '' : 's'}</div></div>
+        ${gstats.lastPlayedAt ? `<div class="gd-tile"><div class="gd-num">${fmtDay(gstats.lastPlayedAt)}</div><div class="gd-lbl">last played</div></div>` : ''}
+        ${gstats.champion ? `<div class="gd-tile"><div class="gd-num">👑 ${esc(gstats.champion.displayName)}</div><div class="gd-lbl">champion · ${gstats.champion.wins} win${gstats.champion.wins === 1 ? '' : 's'}</div></div>` : ''}
+        ${gstats.bestScore ? `<div class="gd-tile"><div class="gd-num">${gstats.bestScore.score}${game.scoreDir === 'low' ? ' ↓' : ''}</div><div class="gd-lbl">record — ${esc(gstats.bestScore.displayName)}</div></div>` : ''}
+      </div>
+      ${gstats.record?.length ? `<div class="card-owners" style="margin:2px 0 8px">${gstats.record.map((r) => `<span class="owner-chip" style="--c:${memberColor(r.id)}">${esc(r.displayName)} ${r.wins}W · ${r.plays}P</span>`).join('')}</div>` : ''}` : ''}
       <p class="gd-desc">${game.description ? esc(game.description) : '<em>No description available yet.</em>'}</p>
+      ${loanData?.total ? `
+      <div class="gd-loans">
+        <h3>Loan history</h3>
+        <div class="r-meta" style="margin-bottom:6px">Borrowed ${loanData.total}×${loanData.loans[0] && !loanData.loans[0].returnedAt ? ` · currently with ${esc(loanData.loans[0].borrowerName)} (${daysOut(loanData.loans[0].outAt)} day${daysOut(loanData.loans[0].outAt) === 1 ? '' : 's'} out)` : ''}</div>
+        ${loanData.loans.slice(0, 3).map((l) => `<div class="r-meta">• ${esc(l.borrowerName)} ← ${esc(l.ownerName)}, ${fmtDate(l.outAt)}${l.returnedAt ? ` → returned ${fmtDate(l.returnedAt)}` : ' (still out)'}</div>`).join('')}
+      </div>` : ''}
       <div class="gd-links">
         ${game.websiteUrl ? `<a class="btn" href="${esc(game.websiteUrl)}" target="_blank" rel="noopener">Official site ↗</a>` : ''}
         ${game.bggId ? `<a class="btn" href="https://boardgamegeek.com/boardgame/${game.bggId}" target="_blank" rel="noopener">BoardGameGeek ↗</a>` : ''}
       </div>
     </div>`);
+}
+
+// GitHub-style activity heatmap from a sparse { 'YYYY-MM-DD': count } map.
+// Built from LOCAL dates (played_at is the logger's local date).
+function heatmapHtml(map) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(today);
+  start.setDate(start.getDate() - 363);
+  start.setDate(start.getDate() - start.getDay()); // snap back to that week's Sunday
+  const cells = [];
+  const cur = new Date(start);
+  while (cur <= today) {
+    const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+    const n = map[key] || 0;
+    const lvl = n >= 5 ? 4 : n >= 3 ? 3 : n;
+    cells.push(`<div class="hm-cell l${lvl}"${n ? ` title="${key} · ${n} play${n > 1 ? 's' : ''}"` : ''}></div>`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return `<div class="hm-grid">${cells.join('')}</div>`;
 }
 
 // shared helper: was this card click on an interactive control?
@@ -1459,25 +1708,40 @@ function openOwnersModal(crew, game, members) {
           </label>
           <select class="loc" data-owner="${m.id}" ${owner ? '' : 'disabled'} title="Where is this copy right now?">
             <option value="">at home</option>
+            ${cur && !members.some((x) => x.id === cur) ? `<option value="${cur}" selected>with ${esc(owner.loanedTo.displayName)} (other crew)</option>` : ''}
             ${members.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${cur === x.id ? 'selected' : ''}>with ${esc(x.displayName)}</option>`).join('')}
           </select>
+          <label class="due-wrap" data-due-for="${m.id}" style="${cur ? '' : 'display:none'}">⏰ Due back
+            <input type="date" class="due" data-owner-due="${m.id}" value="${esc(owner?.dueDate || '')}">
+          </label>
         </div>`;
         }).join('')}
       </div>
       <div class="form-error" id="o-error"></div>
       <button class="btn btn-primary" id="o-save" style="margin-top:10px">Save</button>
     </div>`);
+  const syncDue = (id) => {
+    const sel = modalRoot.querySelector(`.loc[data-owner="${id}"]`);
+    const wrap = modalRoot.querySelector(`.due-wrap[data-due-for="${id}"]`);
+    wrap.style.display = sel.value && !sel.disabled ? '' : 'none';
+    if (!sel.value || sel.disabled) modalRoot.querySelector(`.due[data-owner-due="${id}"]`).value = '';
+  };
   for (const cb of modalRoot.querySelectorAll('#owner-rows input[type="checkbox"]')) {
     cb.onchange = () => {
       const sel = modalRoot.querySelector(`.loc[data-owner="${cb.value}"]`);
       sel.disabled = !cb.checked;
       if (!cb.checked) sel.value = '';
+      syncDue(cb.value);
     };
+  }
+  for (const sel of modalRoot.querySelectorAll('#owner-rows .loc')) {
+    sel.addEventListener('change', () => syncDue(sel.dataset.owner));
   }
   $('#o-save').onclick = async () => {
     const owners = [...modalRoot.querySelectorAll('#owner-rows input:checked')].map((i) => ({
       id: Number(i.value),
       loanedTo: modalRoot.querySelector(`.loc[data-owner="${i.value}"]`).value || null,
+      dueDate: modalRoot.querySelector(`.due[data-owner-due="${i.value}"]`).value || null,
     }));
     try {
       await api(`/crews/${crew.id}/games/${game.id}/owners`, { method: 'PUT', body: { owners } });
