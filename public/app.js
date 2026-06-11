@@ -818,6 +818,7 @@ async function viewCrewDetail(id) {
     <div class="stats-line">${games.length} unique game${games.length === 1 ? '' : 's'} across ${members.length} shel${members.length === 1 ? 'f' : 'ves'}${multiOwned ? ` · ${multiOwned} owned by more than one person` : ''}</div>
 
     <div class="filter-bar" id="cw-filters">
+      <div id="cw-filterctl" style="display:contents">
       <input type="text" class="search" id="cw-q" placeholder="Search games…" value="${esc(crewState.q)}">
       <div class="filter-group" id="players-chips">
         <span class="glabel">Players</span>
@@ -854,8 +855,9 @@ async function viewCrewDetail(id) {
           <option value="owners" ${crewState.sort === 'owners' ? 'selected' : ''}>Most owners</option>
         </select>
       </div>
-      <span class="nav-spacer"></span>
       <button class="btn" id="surprise-btn">🎲 Surprise me</button>
+      </div>
+      <span class="nav-spacer"></span>
       <div class="segmented">
         <button data-view="grid" class="${crewState.view === 'grid' ? 'active' : ''}">Grid</button>
         <button data-view="matrix" class="${crewState.view === 'matrix' ? 'active' : ''}">Who has what</button>
@@ -904,13 +906,17 @@ async function viewCrewDetail(id) {
 
   function renderGames() {
     const container = $('#cw-games');
+    const banner = $('#surprise-result');
     if (crewState.view === 'stats') {
-      $('#cw-filters').style.display = 'none';
+      // hide the game filters but ALWAYS keep the view switcher visible
+      $('#cw-filterctl').style.display = 'none';
+      banner.style.display = 'none';
       $('#cw-count').textContent = '';
       renderStats(container);
       return;
     }
-    $('#cw-filters').style.display = '';
+    $('#cw-filterctl').style.display = 'contents';
+    if (banner.innerHTML) banner.style.display = '';
     const list = filtered();
     $('#cw-count').textContent = `${list.length} of ${games.length} games`;
     if (!list.length) {
