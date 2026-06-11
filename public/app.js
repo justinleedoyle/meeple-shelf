@@ -1532,6 +1532,7 @@ async function viewCrewDetail(id) {
             ${p.game.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(p.game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow">
               <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}${p.host ? ` · ${icon('home')} ${esc(p.host.displayName)}` : ''}</span></div>
+              ${p.expansions?.length ? `<div class="r-meta">+ ${p.expansions.map((x) => esc(expShortTitle(x))).join(', ')}</div>` : ''}
               <div class="card-owners" style="margin-top:4px">${p.players.map((pl) => `<span class="owner-chip" style="--c:${memberColor(pl.id)}">${pl.won ? icon('crown') + ' ' : ''}${esc(pl.displayName)}${pl.score != null ? ` · ${pl.score}` : ''}</span>`).join('')}</div>
               ${p.notes ? `<div class="card-notes">${esc(p.notes)}</div>` : ''}
             </div>
@@ -1751,6 +1752,7 @@ async function viewCrewDetail(id) {
 
   function openLogPlayModal(preGame = null) {
     let selectedGame = preGame;
+    const pickedExps = new Set(); // expansions played alongside the base game
     const today = new Date();
     const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
@@ -1794,13 +1796,29 @@ async function viewCrewDetail(id) {
     function renderGameArea() {
       const area = $('#lp-game-area');
       if (selectedGame) {
+        // expansions of this game that live on a crew shelf — toggle what was played
+        const kids = games.filter((g) => g.expansionOf === selectedGame.id);
         area.innerHTML = `
           <div class="result-row">
             ${selectedGame.imageUrl ? `<img class="r-thumb" src="${esc(selectedGame.imageUrl)}" alt="" onerror="this.remove()">` : ''}
             <div class="r-grow"><div class="r-title">${esc(selectedGame.title)}</div></div>
             <button class="btn btn-sm" id="lp-change">Change</button>
-          </div>`;
-        $('#lp-change').onclick = () => { selectedGame = null; renderGameArea(); };
+          </div>
+          ${kids.length ? `<div class="owner-pick" id="lp-exps">
+            <span class="glabel">With</span>
+            ${kids.map((k) => `<button class="chip-btn ${pickedExps.has(k.id) ? 'active' : ''}" data-exp="${k.id}">${esc(expShortTitle(k))}</button>`).join('')}
+          </div>` : ''}`;
+        $('#lp-change').onclick = () => { selectedGame = null; pickedExps.clear(); renderGameArea(); };
+        if (kids.length) {
+          $('#lp-exps').addEventListener('click', (e) => {
+            const chip = e.target.closest('[data-exp]');
+            if (!chip) return;
+            const xid = Number(chip.dataset.exp);
+            if (pickedExps.has(xid)) pickedExps.delete(xid);
+            else pickedExps.add(xid);
+            chip.classList.toggle('active', pickedExps.has(xid));
+          });
+        }
       } else {
         area.innerHTML = `
           <input type="text" id="lp-q" placeholder="Search the crew's games…" autocomplete="off">
@@ -1822,7 +1840,18 @@ async function viewCrewDetail(id) {
         resultsEl.addEventListener('click', (e) => {
           const row = e.target.closest('[data-pick]');
           if (!row) return;
-          selectedGame = games.find((g) => g.id === Number(row.dataset.pick));
+          let picked = games.find((g) => g.id === Number(row.dataset.pick));
+          pickedExps.clear();
+          // picking an expansion logs the play against its base game (so stats
+          // stay whole) with that expansion pre-checked
+          if (picked?.expansionOf) {
+            const base = games.find((b) => b.id === picked.expansionOf);
+            if (base) {
+              pickedExps.add(picked.id);
+              picked = base;
+            }
+          }
+          selectedGame = picked;
           renderGameArea();
           suggestCrowns(); // re-evaluate winners under the picked game's scoring direction
         });
@@ -1910,7 +1939,7 @@ async function viewCrewDetail(id) {
       try {
         const { milestone } = await api(`/crews/${id}/plays`, {
           method: 'POST',
-          body: { gameId: selectedGame.id, playedAt: $('#lp-date').value, players, notes: $('#lp-notes').value, hostId: hostChip ? Number(hostChip.dataset.host) : null },
+          body: { gameId: selectedGame.id, playedAt: $('#lp-date').value, players, notes: $('#lp-notes').value, hostId: hostChip ? Number(hostChip.dataset.host) : null, expansionIds: [...pickedExps] },
         });
         const winners = players.filter((p) => p.won);
         toast(winners.length ? `Logged — crown${winners.length > 1 ? 's' : ''} to ${winners.map((w) => members.find((m) => m.id === w.id)?.displayName).join(', ')}` : `Logged ${selectedGame.title}`);

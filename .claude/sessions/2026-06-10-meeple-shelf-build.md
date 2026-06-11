@@ -307,3 +307,22 @@ Nothing — feature-complete as scoped.
 - Prod: backup-pre-backlog-pack.db on volume + /tmp/prod-pre-backlog.db local
   (158 games), deploy = machine v16, smoke: all new endpoints 200, payload has
   tags/grabs, pendingRequests present, 31 sprite symbols live, no writes.
+
+## Phase 18: plays with expansions, DEPLOYED
+- play_expansions (play_id, game_id, CASCADE). POST plays accepts expansionIds
+  (≤12, deduped): each must be expansion_of the logged game AND on a crew shelf
+  (status != 'wish') — one IN query. Inserted in the play txn. playsFor()
+  returns expansions per play; the play stays on the BASE game_id so milestones/
+  champions/playCount roll up whole.
+- Log-play modal: "With" chip row of the base game's crew-owned expansions
+  (expShortTitle); pickedExps Set cleared on Change/re-pick. Picking an
+  EXPANSION in the search redirects to its base with that chip pre-checked —
+  stats can't fragment onto expansion rows. Recent-plays rows show
+  "+ Euro, Oceania" meta line.
+- Tests: /tmp/expansion-play-test.mjs — 15 green (link, happy path incl. dedupe
+  + cross-owner expansions, wrong-base/non-expansion/wish-only/garbage 400s,
+  rollup playCount, delete cascade). Preview: chips + pre-check verified
+  (screenshot); feed line verified via fetch-driven play (preview renderer
+  flaky on long modal click-chains — known quirk). Prod smoke: logged
+  Wingspan + Americas/Asia, garbage rejected, play deleted → 0 plays residue.
+  Machine v17.

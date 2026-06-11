@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS loan_events (
 CREATE INDEX IF NOT EXISTS idx_loan_events_open ON loan_events(owner_id, game_id);
 CREATE INDEX IF NOT EXISTS idx_plays_crew_game ON plays(crew_id, game_id);
 
+CREATE TABLE IF NOT EXISTS play_expansions (
+  play_id INTEGER NOT NULL REFERENCES plays(id) ON DELETE CASCADE,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  PRIMARY KEY (play_id, game_id)
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   crew_id INTEGER NOT NULL REFERENCES crews(id) ON DELETE CASCADE,

@@ -776,6 +776,18 @@ function playsFor(crewId, limit = 100, playId = null) {
     if (!byPlay.has(p.play_id)) byPlay.set(p.play_id, []);
     byPlay.get(p.play_id).push({ id: p.id, displayName: p.display_name, won: !!p.won, score: p.score });
   }
+  const exps = db
+    .prepare(
+      `SELECT pe.play_id, g.id, g.title FROM play_expansions pe
+       JOIN games g ON g.id = pe.game_id
+       WHERE pe.play_id IN (${ids.map(() => '?').join(',')}) ORDER BY g.title COLLATE NOCASE`
+    )
+    .all(...ids);
+  const expBy = new Map();
+  for (const x of exps) {
+    if (!expBy.has(x.play_id)) expBy.set(x.play_id, []);
+    expBy.get(x.play_id).push({ id: x.id, title: x.title });
+  }
   return rows.map((r) => ({
     id: r.play_id,
     playedAt: r.played_at,
@@ -783,6 +795,7 @@ function playsFor(crewId, limit = 100, playId = null) {
     host: r.host_user_id ? { id: r.host_user_id, displayName: r.host_name } : null,
     game: gameToJson(r),
     players: byPlay.get(r.play_id) || [],
+    expansions: expBy.get(r.play_id) || [],
   }));
 }
 
@@ -810,6 +823,27 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'The host must be a member of this crew' });
   }
 
+  // expansions played alongside the base game — the play still counts toward
+  // the base game's stats, the expansions just ride along on the record
+  const expansionIds = Array.isArray(req.body.expansionIds)
+    ? [...new Set(req.body.expansionIds.map(Number).filter(Number.isInteger))].slice(0, 12)
+    : [];
+  if (expansionIds.length) {
+    const ph = expansionIds.map(() => '?').join(',');
+    const valid = db
+      .prepare(
+        `SELECT g.id FROM games g
+         WHERE g.id IN (${ph}) AND g.expansion_of = ?
+           AND EXISTS (SELECT 1 FROM library_entries le
+                       JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = ?
+                       WHERE le.game_id = g.id AND le.status != 'wish')`
+      )
+      .all(...expansionIds, game.id, crew.id);
+    if (valid.length !== expansionIds.length) {
+      return res.status(400).json({ error: "Expansions must belong to this game and be on a crew shelf" });
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   let playedAt = dateOrNull(req.body.playedAt) || today;
   if (playedAt > today) playedAt = today; // future-dated mistaps clamp to today
@@ -823,6 +857,9 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
       .run(crew.id, game.id, playedAt, notes, req.user.id, hostId).lastInsertRowid;
     for (const [uid, v] of seen) {
       db.prepare('INSERT INTO play_players (play_id, user_id, won, score) VALUES (?, ?, ?, ?)').run(playId, uid, v.won, v.score);
+    }
+    for (const xid of expansionIds) {
+      db.prepare('INSERT INTO play_expansions (play_id, game_id) VALUES (?, ?)').run(playId, xid);
     }
     // lazy scoring-direction inference: first scores ever for this game default
     // to highest-wins; never overwrites a direction someone chose explicitly
