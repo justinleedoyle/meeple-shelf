@@ -326,3 +326,41 @@ Nothing — feature-complete as scoped.
   flaky on long modal click-chains — known quirk). Prod smoke: logged
   Wingspan + Americas/Asia, garbage rejected, play deleted → 0 plays residue.
   Machine v17.
+
+## Phase 19: PLAY PACK — live mode, night logging, editing, durations, coop, expansion stats. DEPLOYED
+- Process: 4-agent spec workflow (671k tokens, specs with line-anchored merge
+  contracts) → serial implementation → 4-lens adversarial review workflow
+  (25 findings, ALL fixed, 0 declined) → 275 tests green → machine v18.
+- Schema: plays.event_id (ON DELETE SET NULL — crew-delete cascade ordering),
+  duration_min, coop_result; live_plays/live_play_players/live_play_expansions.
+- Shared path: insertPlayRows() + milestoneFor() feed POST/PATCH/finish — one
+  insert path, milestones exact-count create-only. parseExpansionIds/
+  expansionIdsValid(preAttached)/eventAttachError shared validators.
+- Live mode: sessions are rows (phone-death-proof); timer DERIVED from
+  started_at; strip banners (pulse dot, 6h stale tint, 24h lazy purge);
+  one-modal-two-screens (pad: 44px steppers + direct input + add/remove,
+  debounced absolute-value PUTs; finish: derived crowns/coop toggle + #lv-dur
+  live tick); 409-join on double-start; finish 409s the loser via in-txn
+  DELETE changes check. Poll 10s with dirty()-guard re-checked AFTER await;
+  immediate refresh on open (stale strip snapshot).
+- Review hardening (the big ones): unsent Set + inflight counter replaces the
+  leaking pendingSends (trailing debounce coalesces N calls→1 execution — 3
+  reviewers traced it independently); modal-instance gone() guards on every
+  interval/render (stale polls were closing/painting the NEXT modal); departed
+  members/hosts preserved through edits server (preAttached/host exemption) +
+  client (record merge in buildBody, "Also played" line, departed-host chip);
+  coop×score_dir reclassification seams (effectiveCoop respects current dir,
+  explicit-null zeroes crowns, self-heal, wonFor preserves legacy crowns);
+  finish re-validates the event link (canceled nights drop it); PATCH 400s on
+  out-of-range duration + non-array expansionIds (no silent wipes); malformed
+  bodies 400/404 not 500; stripTick element-capture (id lookup stacked one
+  interval per repaint); m-name ellipsis (long names slid UNDER the − button
+  at 375px); steppers stay 44px on mobile.
+- Tests: event-play 15, live-play 52 (incl. DB time-travel for duration/expiry
+  + canceled-night finish), plays-edit 48 (incl. departed-member R-suite),
+  expansion-stats 15; legacy 145 untouched. Prod smoke (zero residue): live
+  lifecycle on crew 1 (start→score→finish→delete, 0 plays after) + throwaway
+  crew for event-linked play/edit/SET-NULL-cascade leave. Backup:
+  backup-pre-play-pack.db on volume + /tmp local (158 games verified).
+- Deferred from review: none. POST durationMin keeps spec'd silent-null (only
+  PATCH 400s — create has nothing to destroy).
