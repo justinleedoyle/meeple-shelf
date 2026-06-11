@@ -618,6 +618,12 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
       .all(crew.id)
       .map((r) => [r.game_id, r])
   );
+  // expansion co-play counts — powers the "used in N plays" badge on expansion cards
+  const expAgg = new Map(
+    db.prepare('SELECT pe.game_id, COUNT(*) AS n FROM play_expansions pe JOIN plays p ON p.id = pe.play_id WHERE p.crew_id = ? GROUP BY pe.game_id')
+      .all(crew.id)
+      .map((r) => [r.game_id, r.n])
+  );
   const byGame = new Map();
   for (const r of rows) {
     if (!byGame.has(r.id)) {
@@ -625,6 +631,7 @@ app.get('/api/crews/:id', requireAuth, (req, res) => {
         ...gameToJson(r),
         playCount: playAgg.get(r.id)?.n || 0,
         lastPlayedAt: playAgg.get(r.id)?.last || null,
+        usedIn: expAgg.get(r.id) || 0,
         tags: tagsBy.get(r.id) || [],
         owners: [],
       });
@@ -751,13 +758,80 @@ function memberOfCrew(req, res) {
   return crew;
 }
 
+// ---- shared play-creation plumbing (used by POST /plays, PATCH /plays, and
+// live-play finish — ONE insert path so score_dir inference, expansion rows,
+// and stats behave identically everywhere). Plain function: callers validate
+// and wrap it in their own db.transaction.
+function insertPlayRows({ crewId, gameId, playedAt, notes, loggedBy, hostId, players, expansionIds, durationMin, eventId, coopResult }) {
+  const playId = db
+    .prepare(
+      'INSERT INTO plays (crew_id, game_id, played_at, notes, logged_by, host_user_id, duration_min, event_id, coop_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    .run(crewId, gameId, playedAt, notes, loggedBy, hostId ?? null, durationMin ?? null, eventId ?? null, coopResult ?? null).lastInsertRowid;
+  for (const p of players) {
+    db.prepare('INSERT INTO play_players (play_id, user_id, won, score) VALUES (?, ?, ?, ?)').run(playId, p.id, p.won, p.score);
+  }
+  for (const xid of expansionIds || []) {
+    db.prepare('INSERT INTO play_expansions (play_id, game_id) VALUES (?, ?)').run(playId, xid);
+  }
+  // lazy scoring-direction inference: first scores ever for this game default
+  // to highest-wins; never overwrites a direction someone chose explicitly
+  if (players.some((p) => p.score != null)) {
+    db.prepare("UPDATE games SET score_dir = 'high' WHERE id = ? AND score_dir IS NULL").run(gameId);
+  }
+  return playId;
+}
+
+// milestones fire on EXACT counts so each threshold toasts once, at create time only
+function milestoneFor(crewId, gameId) {
+  const n = db.prepare('SELECT COUNT(*) AS n FROM plays WHERE crew_id = ? AND game_id = ?').get(crewId, gameId).n;
+  return n === 25 ? 'quarter' : n === 10 ? 'dime' : n === 5 ? 'five' : null;
+}
+
+const parseExpansionIds = (raw) =>
+  Array.isArray(raw) ? [...new Set(raw.map(Number).filter(Number.isInteger))].slice(0, 12) : [];
+
+// every id must be an expansion OF the base game; ids not in preAttached must
+// also live on a crew shelf (preAttached lets edits keep historical expansions
+// whose owner has since left — the play happened, the record stands)
+function expansionIdsValid(ids, baseGameId, crewId, preAttached = new Set()) {
+  if (!ids.length) return true;
+  const ph = ids.map(() => '?').join(',');
+  const linked = db.prepare(`SELECT id FROM games WHERE id IN (${ph}) AND expansion_of = ?`).all(...ids, baseGameId);
+  if (linked.length !== ids.length) return false;
+  const needShelf = ids.filter((id) => !preAttached.has(id));
+  if (!needShelf.length) return true;
+  const ph2 = needShelf.map(() => '?').join(',');
+  const onShelf = db
+    .prepare(
+      `SELECT g.id FROM games g
+       WHERE g.id IN (${ph2})
+         AND EXISTS (SELECT 1 FROM library_entries le
+                     JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = ?
+                     WHERE le.game_id = g.id AND le.status != 'wish')`
+    )
+    .all(...needShelf, crewId);
+  return onShelf.length === needShelf.length;
+}
+
+// the one rule for attaching anything to a game night: same crew, not called off
+function eventAttachError(eventId, crewId) {
+  const ev = db.prepare('SELECT * FROM events WHERE id = ? AND crew_id = ?').get(eventId, crewId);
+  if (!ev) return 'That game night isn’t on this crew’s calendar';
+  if (ev.canceled_at) return 'That night was called off';
+  return null;
+}
+
 function playsFor(crewId, limit = 100, playId = null) {
   const rows = db
     .prepare(
       `SELECT p.id AS play_id, p.played_at, p.notes AS play_notes,
-              p.host_user_id, hu.display_name AS host_name, g.*
+              p.host_user_id, hu.display_name AS host_name,
+              p.duration_min, p.coop_result, p.event_id,
+              e.title AS event_title, e.event_date AS ev_date, g.*
        FROM plays p JOIN games g ON g.id = p.game_id
        LEFT JOIN users hu ON hu.id = p.host_user_id
+       LEFT JOIN events e ON e.id = p.event_id
        WHERE p.crew_id = ? AND (? IS NULL OR p.id = ?)
        ORDER BY p.played_at DESC, p.id DESC LIMIT ?`
     )
@@ -793,6 +867,9 @@ function playsFor(crewId, limit = 100, playId = null) {
     playedAt: r.played_at,
     notes: r.play_notes,
     host: r.host_user_id ? { id: r.host_user_id, displayName: r.host_name } : null,
+    durationMin: r.duration_min ?? null,
+    coopResult: r.coop_result ?? null,
+    event: r.event_id ? { id: r.event_id, title: r.event_title, date: r.ev_date } : null,
     game: gameToJson(r),
     players: byPlay.get(r.play_id) || [],
     expansions: expBy.get(r.play_id) || [],
@@ -811,6 +888,7 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
     .map((r) => r.user_id);
   const seen = new Map();
   for (const p of Array.isArray(req.body.players) ? req.body.players : []) {
+    if (!p || typeof p !== 'object') continue; // [null, "x"] shouldn't 500
     const id = Number(p.id);
     if (Number.isInteger(id)) seen.set(id, { won: p.won ? 1 : 0, score: scoreOrNull(p.score) });
   }
@@ -823,54 +901,59 @@ app.post('/api/crews/:id/plays', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'The host must be a member of this crew' });
   }
 
+  // co-op result: only meaningful on games marked co-op; forces the team outcome
+  const coopResult = req.body.coopResult == null ? null : req.body.coopResult;
+  if (coopResult !== null && !['win', 'loss'].includes(coopResult)) {
+    return res.status(400).json({ error: 'Co-op result must be win or loss' });
+  }
+  if (coopResult !== null && game.score_dir !== 'coop') {
+    return res.status(400).json({ error: 'Mark this game as co-op first (scoring on the game card)' });
+  }
+  // the team wins or loses together — coop_result owns the won flags
+  if (coopResult !== null) {
+    for (const v of seen.values()) v.won = coopResult === 'win' ? 1 : 0;
+  }
+
+  const durationMin = intOrNull(req.body.durationMin, 1, 1440);
+
+  // provenance link to a game night: same crew, not called off
+  const eventId = intOrNull(req.body.eventId, 1, 99999999);
+  if (eventId != null) {
+    const evErr = eventAttachError(eventId, crew.id);
+    if (evErr) return res.status(400).json({ error: evErr });
+  }
+
   // expansions played alongside the base game — the play still counts toward
   // the base game's stats, the expansions just ride along on the record
-  const expansionIds = Array.isArray(req.body.expansionIds)
-    ? [...new Set(req.body.expansionIds.map(Number).filter(Number.isInteger))].slice(0, 12)
-    : [];
-  if (expansionIds.length) {
-    const ph = expansionIds.map(() => '?').join(',');
-    const valid = db
-      .prepare(
-        `SELECT g.id FROM games g
-         WHERE g.id IN (${ph}) AND g.expansion_of = ?
-           AND EXISTS (SELECT 1 FROM library_entries le
-                       JOIN crew_members cm ON cm.user_id = le.user_id AND cm.crew_id = ?
-                       WHERE le.game_id = g.id AND le.status != 'wish')`
-      )
-      .all(...expansionIds, game.id, crew.id);
-    if (valid.length !== expansionIds.length) {
-      return res.status(400).json({ error: "Expansions must belong to this game and be on a crew shelf" });
-    }
+  const expansionIds = parseExpansionIds(req.body.expansionIds);
+  if (!expansionIdsValid(expansionIds, game.id, crew.id)) {
+    return res.status(400).json({ error: 'Expansions must belong to this game and be on a crew shelf' });
   }
 
   const today = new Date().toISOString().slice(0, 10);
   let playedAt = dateOrNull(req.body.playedAt) || today;
   if (playedAt > today) playedAt = today; // future-dated mistaps clamp to today
   const notes = String(req.body.notes || '').slice(0, 300);
-  const hasScores = [...seen.values()].some((v) => v.score != null);
+  const players = [...seen].map(([id, v]) => ({ id, won: v.won, score: v.score }));
 
   let playId;
   db.transaction(() => {
-    playId = db
-      .prepare('INSERT INTO plays (crew_id, game_id, played_at, notes, logged_by, host_user_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(crew.id, game.id, playedAt, notes, req.user.id, hostId).lastInsertRowid;
-    for (const [uid, v] of seen) {
-      db.prepare('INSERT INTO play_players (play_id, user_id, won, score) VALUES (?, ?, ?, ?)').run(playId, uid, v.won, v.score);
-    }
-    for (const xid of expansionIds) {
-      db.prepare('INSERT INTO play_expansions (play_id, game_id) VALUES (?, ?)').run(playId, xid);
-    }
-    // lazy scoring-direction inference: first scores ever for this game default
-    // to highest-wins; never overwrites a direction someone chose explicitly
-    if (hasScores) {
-      db.prepare("UPDATE games SET score_dir = 'high' WHERE id = ? AND score_dir IS NULL").run(game.id);
-    }
+    playId = insertPlayRows({
+      crewId: crew.id,
+      gameId: game.id,
+      playedAt,
+      notes,
+      loggedBy: req.user.id,
+      hostId,
+      players,
+      expansionIds,
+      durationMin,
+      eventId,
+      coopResult,
+    });
   })();
 
-  const playCount = db.prepare('SELECT COUNT(*) AS n FROM plays WHERE crew_id = ? AND game_id = ?').get(crew.id, game.id).n;
-  const milestone = playCount === 25 ? 'quarter' : playCount === 10 ? 'dime' : playCount === 5 ? 'five' : null;
-  res.status(201).json({ play: playsFor(crew.id, 1, Number(playId))[0] || null, milestone });
+  res.status(201).json({ play: playsFor(crew.id, 1, Number(playId))[0] || null, milestone: milestoneFor(crew.id, game.id) });
 });
 
 app.get('/api/crews/:id/plays', requireAuth, (req, res) => {
@@ -884,6 +967,427 @@ app.delete('/api/crews/:id/plays/:playId', requireAuth, (req, res) => {
   if (!crew) return;
   const info = db.prepare('DELETE FROM plays WHERE id = ? AND crew_id = ?').run(req.params.playId, crew.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Play not found' });
+  res.json({ ok: true });
+});
+
+// Edit a play. Any crew member may edit (parity with delete — family trust
+// model). Scalars update when the key is present; players/expansionIds are
+// FULL-REPLACE when present, untouched when absent. The game itself is locked
+// (changing it invalidates expansions/coop context — delete + relog instead).
+// Milestones never re-fire here: play count doesn't change on edit.
+app.patch('/api/crews/:id/plays/:playId', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  const play = db.prepare('SELECT * FROM plays WHERE id = ? AND crew_id = ?').get(req.params.playId, crew.id);
+  if (!play) return res.status(404).json({ error: 'Play not found' });
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(play.game_id);
+
+  const memberIds = db
+    .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
+    .all(crew.id)
+    .map((r) => r.user_id);
+
+  const sets = {};
+  if (req.body.playedAt !== undefined) {
+    // on edit an invalid date is an error, not a silent default — quietly moving
+    // a historical play to today would corrupt the record being fixed
+    const d = dateOrNull(req.body.playedAt);
+    if (!d) return res.status(400).json({ error: 'That date doesn’t look right' });
+    const today = new Date().toISOString().slice(0, 10);
+    sets.played_at = d > today ? today : d;
+  }
+  if (req.body.notes !== undefined) sets.notes = String(req.body.notes || '').slice(0, 300);
+  if (req.body.hostId !== undefined) {
+    const hostId = intOrNull(req.body.hostId, 1, 99999999);
+    // a departed member can stay the host of a play that happened at their
+    // place — only NEW hosts must be current members
+    if (hostId != null && hostId !== play.host_user_id && !memberIds.includes(hostId)) {
+      return res.status(400).json({ error: 'The host must be a member of this crew' });
+    }
+    sets.host_user_id = hostId;
+  }
+  if (req.body.durationMin !== undefined) {
+    const dm = intOrNull(req.body.durationMin, 1, 1440);
+    // on edit, an out-of-range duration is an error — silently nulling a
+    // recorded duration would corrupt the record being fixed (same posture
+    // as playedAt above; create keeps its forgiving silent-null default)
+    if (dm === null && req.body.durationMin !== null && req.body.durationMin !== '') {
+      return res.status(400).json({ error: 'Duration must be 1–1440 minutes' });
+    }
+    sets.duration_min = dm;
+  }
+  if (req.body.coopResult !== undefined) {
+    const cr = req.body.coopResult == null ? null : req.body.coopResult;
+    if (cr !== null && !['win', 'loss'].includes(cr)) {
+      return res.status(400).json({ error: 'Co-op result must be win or loss' });
+    }
+    if (cr !== null && game.score_dir !== 'coop') {
+      return res.status(400).json({ error: 'Mark this game as co-op first (scoring on the game card)' });
+    }
+    sets.coop_result = cr;
+  }
+
+  let players = null;
+  if (req.body.players !== undefined) {
+    // players already on this play stay valid even after leaving the crew —
+    // an edit must never erase historical participation (same idea as the
+    // expansions' preAttached escape hatch below)
+    const prevPlayerIds = new Set(
+      db.prepare('SELECT user_id FROM play_players WHERE play_id = ?').all(play.id).map((r) => r.user_id)
+    );
+    const seen = new Map();
+    for (const p of Array.isArray(req.body.players) ? req.body.players : []) {
+      if (!p || typeof p !== 'object') continue; // [null, "x"] shouldn't 500
+      const id = Number(p.id);
+      if (Number.isInteger(id)) seen.set(id, { won: p.won ? 1 : 0, score: scoreOrNull(p.score) });
+    }
+    if (!seen.size) return res.status(400).json({ error: 'Pick who played' });
+    for (const id of seen.keys()) {
+      if (!memberIds.includes(id) && !prevPlayerIds.has(id)) {
+        return res.status(400).json({ error: 'All players must be members of this crew' });
+      }
+    }
+    players = [...seen].map(([id, v]) => ({ id, won: v.won, score: v.score }));
+  }
+
+  let expansionIds = null;
+  if (req.body.expansionIds !== undefined) {
+    if (!Array.isArray(req.body.expansionIds)) {
+      return res.status(400).json({ error: 'expansionIds must be a list' }); // not a silent wipe
+    }
+    expansionIds = parseExpansionIds(req.body.expansionIds);
+    // expansions already on the play skip the shelf check — the play happened
+    // with them even if their owner has since left the crew
+    const preAttached = new Set(
+      db.prepare('SELECT game_id FROM play_expansions WHERE play_id = ?').all(play.id).map((r) => r.game_id)
+    );
+    if (!expansionIdsValid(expansionIds, play.game_id, crew.id, preAttached)) {
+      return res.status(400).json({ error: 'Expansions must belong to this game and be on a crew shelf' });
+    }
+  }
+
+  db.transaction(() => {
+    if (players) {
+      db.prepare('DELETE FROM play_players WHERE play_id = ?').run(play.id);
+      for (const p of players) {
+        db.prepare('INSERT INTO play_players (play_id, user_id, won, score) VALUES (?, ?, ?, ?)').run(play.id, p.id, p.won, p.score);
+      }
+    }
+    // invariant: coop_result='win' ⟹ whole roster won=1; 'loss' ⟹ all 0.
+    // Re-applied after ANY roster or result change so standings never drift.
+    // A stored result on a game that's no longer marked co-op is void — it
+    // must not overwrite an editor's explicit crowns (and self-heals below).
+    const effectiveCoop = 'coop_result' in sets
+      ? sets.coop_result
+      : game.score_dir === 'coop' ? play.coop_result : null;
+    if ((players || 'coop_result' in sets) && effectiveCoop != null) {
+      db.prepare('UPDATE play_players SET won = ? WHERE play_id = ?').run(effectiveCoop === 'win' ? 1 : 0, play.id);
+    }
+    // explicitly clearing the result also clears the team crowns it created
+    if ('coop_result' in sets && sets.coop_result === null && !players && play.coop_result != null) {
+      db.prepare('UPDATE play_players SET won = 0 WHERE play_id = ?').run(play.id);
+    }
+    // self-heal: a roster edit on a game that left co-op mode retires the stale result
+    if (players && game.score_dir !== 'coop' && play.coop_result != null && !('coop_result' in sets)) {
+      db.prepare('UPDATE plays SET coop_result = NULL WHERE id = ?').run(play.id);
+    }
+    if (expansionIds) {
+      db.prepare('DELETE FROM play_expansions WHERE play_id = ?').run(play.id);
+      for (const xid of expansionIds) {
+        db.prepare('INSERT INTO play_expansions (play_id, game_id) VALUES (?, ?)').run(play.id, xid);
+      }
+    }
+    if (Object.keys(sets).length) {
+      db.prepare(`UPDATE plays SET ${Object.keys(sets).map((k) => k + ' = ?').join(', ')} WHERE id = ?`)
+        .run(...Object.values(sets), play.id);
+    }
+    // same lazy inference as create: first-ever scores default the direction
+    if (players && players.some((p) => p.score != null)) {
+      db.prepare("UPDATE games SET score_dir = 'high' WHERE id = ? AND score_dir IS NULL").run(play.game_id);
+    }
+  })();
+
+  res.json({ play: playsFor(crew.id, 1, play.id)[0] });
+});
+
+// ---------- live play mode ("we're playing NOW" — score pad + timer) ----------
+// Sessions are server rows so a locked phone, a dead battery, or a Fly restart
+// loses nothing; the timer is always derived from started_at, never counted
+// client-side. Live rows feed NO stats — stats move only at finish, through
+// the same insertPlayRows path as a normal log.
+
+// lazy janitor: nobody runs a 24h board game session — those are abandonments.
+// Runs at the top of every live route; no cron needed on an auto-stop machine.
+function purgeStaleLivePlays() {
+  db.prepare("DELETE FROM live_plays WHERE started_at < datetime('now', '-24 hours')").run();
+}
+
+function livePlaysFor(crewId, onlyId = null) {
+  const rows = db
+    .prepare(
+      `SELECT lp.id AS live_id, lp.crew_id AS live_crew, lp.started_at, lp.event_id AS live_event,
+              lp.host_user_id AS live_host, hu.display_name AS host_name,
+              lp.started_by, su.display_name AS starter_name, g.*
+       FROM live_plays lp JOIN games g ON g.id = lp.game_id
+       LEFT JOIN users hu ON hu.id = lp.host_user_id
+       LEFT JOIN users su ON su.id = lp.started_by
+       WHERE lp.crew_id = ? AND (? IS NULL OR lp.id = ?)
+       ORDER BY lp.started_at, lp.id`
+    )
+    .all(crewId, onlyId, onlyId);
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.live_id);
+  const ph = ids.map(() => '?').join(',');
+  const players = db
+    .prepare(
+      `SELECT lpp.live_play_id, lpp.score, u.id, u.display_name FROM live_play_players lpp
+       JOIN users u ON u.id = lpp.user_id WHERE lpp.live_play_id IN (${ph}) ORDER BY u.display_name`
+    )
+    .all(...ids);
+  const exps = db
+    .prepare(
+      `SELECT le.live_play_id, g.id, g.title FROM live_play_expansions le
+       JOIN games g ON g.id = le.game_id WHERE le.live_play_id IN (${ph}) ORDER BY g.title COLLATE NOCASE`
+    )
+    .all(...ids);
+  const pBy = new Map();
+  for (const p of players) {
+    if (!pBy.has(p.live_play_id)) pBy.set(p.live_play_id, []);
+    pBy.get(p.live_play_id).push({ id: p.id, displayName: p.display_name, score: p.score });
+  }
+  const eBy = new Map();
+  for (const x of exps) {
+    if (!eBy.has(x.live_play_id)) eBy.set(x.live_play_id, []);
+    eBy.get(x.live_play_id).push({ id: x.id, title: x.title });
+  }
+  return rows.map((r) => ({
+    id: r.live_id,
+    startedAt: r.started_at,
+    startedBy: r.started_by ? { id: r.started_by, displayName: r.starter_name } : null,
+    host: r.live_host ? { id: r.live_host, displayName: r.host_name } : null,
+    eventId: r.live_event,
+    game: gameToJson(r),
+    players: pBy.get(r.live_id) || [],
+    expansions: eBy.get(r.live_id) || [],
+  }));
+}
+
+// guard: session exists (post-purge) and the caller is in its crew
+function livePlayOfMine(req, res) {
+  purgeStaleLivePlays();
+  const lp = db.prepare('SELECT * FROM live_plays WHERE id = ?').get(req.params.id);
+  if (!lp) {
+    res.status(404).json({ error: 'Live session not found' });
+    return null;
+  }
+  const isMember = db.prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?').get(lp.crew_id, req.user.id);
+  if (!isMember) {
+    res.status(403).json({ error: 'You are not a member of this crew' });
+    return null;
+  }
+  return lp;
+}
+
+app.get('/api/crews/:id/live-plays', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  purgeStaleLivePlays();
+  res.json({ livePlays: livePlaysFor(crew.id) });
+});
+
+app.post('/api/crews/:id/live-plays', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  purgeStaleLivePlays();
+  const gameId = intOrNull(req.body.gameId, 1, 99999999); // objects/booleans must not reach the bind
+  const game = gameId && db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const memberIds = db
+    .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
+    .all(crew.id)
+    .map((r) => r.user_id);
+  const playerIds = Array.isArray(req.body.players)
+    ? [...new Set(req.body.players.map(Number).filter(Number.isInteger))]
+    : [];
+  if (!playerIds.length) return res.status(400).json({ error: 'Pick who played' });
+  if (playerIds.some((id) => !memberIds.includes(id))) {
+    return res.status(400).json({ error: 'All players must be members of this crew' });
+  }
+  const hostId = intOrNull(req.body.hostId, 1, 99999999);
+  if (hostId != null && !memberIds.includes(hostId)) {
+    return res.status(400).json({ error: 'The host must be a member of this crew' });
+  }
+  const expansionIds = parseExpansionIds(req.body.expansionIds);
+  if (!expansionIdsValid(expansionIds, game.id, crew.id)) {
+    return res.status(400).json({ error: 'Expansions must belong to this game and be on a crew shelf' });
+  }
+  const eventId = intOrNull(req.body.eventId, 1, 99999999);
+  if (eventId != null) {
+    const evErr = eventAttachError(eventId, crew.id);
+    if (evErr) return res.status(400).json({ error: evErr });
+  }
+
+  // double-taps across two phones are common; two live tables of the SAME game
+  // are not — hand the existing session back so the second phone just joins
+  const dup = db.prepare('SELECT id FROM live_plays WHERE crew_id = ? AND game_id = ?').get(crew.id, game.id);
+  if (dup) {
+    return res.status(409).json({ error: 'This game already has a live session', livePlay: livePlaysFor(crew.id, dup.id)[0] });
+  }
+  const active = db.prepare('SELECT COUNT(*) AS n FROM live_plays WHERE crew_id = ?').get(crew.id).n;
+  if (active >= 4) {
+    return res.status(400).json({ error: 'Four live sessions at once is plenty — finish or abandon one first' });
+  }
+
+  let liveId;
+  db.transaction(() => {
+    liveId = db
+      .prepare('INSERT INTO live_plays (crew_id, game_id, event_id, host_user_id, started_by) VALUES (?, ?, ?, ?, ?)')
+      .run(crew.id, game.id, eventId, hostId, req.user.id).lastInsertRowid;
+    for (const uid of playerIds) {
+      db.prepare('INSERT INTO live_play_players (live_play_id, user_id) VALUES (?, ?)').run(liveId, uid);
+    }
+    for (const xid of expansionIds) {
+      db.prepare('INSERT INTO live_play_expansions (live_play_id, game_id) VALUES (?, ?)').run(liveId, xid);
+    }
+  })();
+  res.status(201).json({ livePlay: livePlaysFor(crew.id, Number(liveId))[0] });
+});
+
+app.get('/api/live-plays/:id', requireAuth, (req, res) => {
+  const lp = livePlayOfMine(req, res);
+  if (!lp) return;
+  res.json({ livePlay: livePlaysFor(lp.crew_id, lp.id)[0] });
+});
+
+// score upsert doubles as add-player-mid-game (score null). Absolute values,
+// last-write-wins — losing one stepper tap when two phones race is harmless.
+app.put('/api/live-plays/:id/players/:userId', requireAuth, (req, res) => {
+  const lp = livePlayOfMine(req, res);
+  if (!lp) return;
+  const userId = intOrNull(req.params.userId, 1, 99999999);
+  const isMember = userId && db.prepare('SELECT 1 FROM crew_members WHERE crew_id = ? AND user_id = ?').get(lp.crew_id, userId);
+  if (!isMember) return res.status(400).json({ error: 'All players must be members of this crew' });
+  db.prepare(
+    `INSERT INTO live_play_players (live_play_id, user_id, score) VALUES (?, ?, ?)
+     ON CONFLICT(live_play_id, user_id) DO UPDATE SET score = excluded.score`
+  ).run(lp.id, userId, scoreOrNull(req.body.score));
+  res.json({ livePlay: livePlaysFor(lp.crew_id, lp.id)[0] });
+});
+
+app.delete('/api/live-plays/:id/players/:userId', requireAuth, (req, res) => {
+  const lp = livePlayOfMine(req, res);
+  if (!lp) return;
+  const count = db.prepare('SELECT COUNT(*) AS n FROM live_play_players WHERE live_play_id = ?').get(lp.id).n;
+  const playing = db
+    .prepare('SELECT 1 FROM live_play_players WHERE live_play_id = ? AND user_id = ?')
+    .get(lp.id, req.params.userId);
+  if (playing && count <= 1) return res.status(400).json({ error: 'A live session needs at least one player' });
+  db.prepare('DELETE FROM live_play_players WHERE live_play_id = ? AND user_id = ?').run(lp.id, req.params.userId);
+  res.json({ livePlay: livePlaysFor(lp.crew_id, lp.id)[0] });
+});
+
+// finish: the session becomes a real play through the exact same insert path
+// as POST /plays — milestone fires once, duration is server-computed, and the
+// live row dies in the same transaction (double-finish can't double-log).
+app.post('/api/live-plays/:id/finish', requireAuth, (req, res) => {
+  const lp = livePlayOfMine(req, res);
+  if (!lp) return;
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(lp.game_id);
+  const sessionPlayers = db
+    .prepare('SELECT user_id, score FROM live_play_players WHERE live_play_id = ?')
+    .all(lp.id);
+  const playerIds = new Set(sessionPlayers.map((p) => p.user_id));
+
+  // co-op result (validated like POST /plays; forces the team outcome)
+  const coopResult = req.body.coopResult == null ? null : req.body.coopResult;
+  if (coopResult !== null && !['win', 'loss'].includes(coopResult)) {
+    return res.status(400).json({ error: 'Co-op result must be win or loss' });
+  }
+  if (coopResult !== null && game.score_dir !== 'coop') {
+    return res.status(400).json({ error: 'Mark this game as co-op first (scoring on the game card)' });
+  }
+
+  // winners: explicit list when present (what the confirm screen shows is what
+  // saves); otherwise derived from scores + score_dir (ties crown everyone)
+  let winnerSet;
+  if (req.body.winnerIds !== undefined) {
+    const ids = Array.isArray(req.body.winnerIds)
+      ? [...new Set(req.body.winnerIds.map(Number).filter(Number.isInteger))]
+      : null;
+    if (!ids || ids.some((id) => !playerIds.has(id))) {
+      return res.status(400).json({ error: 'Winners must be players in this session' });
+    }
+    winnerSet = new Set(ids);
+  } else {
+    winnerSet = new Set();
+    const scored = sessionPlayers.filter((p) => p.score != null);
+    if (game.score_dir !== 'coop' && scored.length >= 2) {
+      const best = game.score_dir === 'low'
+        ? Math.min(...scored.map((p) => p.score))
+        : Math.max(...scored.map((p) => p.score));
+      for (const p of scored) if (p.score === best) winnerSet.add(p.user_id);
+    }
+  }
+  if (coopResult !== null) {
+    winnerSet = coopResult === 'win' ? new Set(playerIds) : new Set();
+  }
+
+  const notes = String(req.body.notes || '').slice(0, 300);
+  const today = new Date().toISOString().slice(0, 10);
+  let playedAt = dateOrNull(req.body.playedAt) || today;
+  if (playedAt > today) playedAt = today;
+  const mins = db
+    .prepare("SELECT CAST(ROUND((julianday('now') - julianday(started_at)) * 1440) AS INTEGER) AS m FROM live_plays WHERE id = ?")
+    .get(lp.id).m;
+  const durationMin = Math.max(1, Math.min(1440, mins));
+  const players = sessionPlayers.map((p) => ({ id: p.user_id, won: winnerSet.has(p.user_id) ? 1 : 0, score: p.score }));
+  const expansionIds = db
+    .prepare('SELECT game_id FROM live_play_expansions WHERE live_play_id = ?')
+    .all(lp.id)
+    .map((r) => r.game_id); // copied as-is: the record reflects what was on the table
+  // the night may have been called off mid-session — the play still logs, but
+  // the event link follows the same rule as every other attach path
+  const eventId = lp.event_id && !eventAttachError(lp.event_id, lp.crew_id) ? lp.event_id : null;
+
+  let playId;
+  try {
+    db.transaction(() => {
+      playId = insertPlayRows({
+        crewId: lp.crew_id,
+        gameId: lp.game_id,
+        playedAt,
+        notes,
+        loggedBy: req.user.id, // the finisher gets the feed credit
+        hostId: lp.host_user_id,
+        players,
+        expansionIds,
+        durationMin,
+        eventId,
+        coopResult,
+      });
+      // belt-and-braces: if another device finished first, roll the play back
+      if (db.prepare('DELETE FROM live_plays WHERE id = ?').run(lp.id).changes === 0) {
+        throw new Error('finished elsewhere');
+      }
+    })();
+  } catch (e) {
+    if (String(e.message).includes('finished elsewhere')) {
+      return res.status(409).json({ error: 'Someone already finished this session' });
+    }
+    throw e;
+  }
+  res.status(201).json({
+    play: playsFor(lp.crew_id, 1, Number(playId))[0] || null,
+    milestone: milestoneFor(lp.crew_id, lp.game_id),
+    durationMin,
+  });
+});
+
+app.delete('/api/live-plays/:id', requireAuth, (req, res) => {
+  const lp = livePlayOfMine(req, res);
+  if (!lp) return;
+  db.prepare('DELETE FROM live_plays WHERE id = ?').run(lp.id); // abandon: nothing logged, no stats move
   res.json({ ok: true });
 });
 
@@ -991,6 +1495,22 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
     })
     .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.plays - a.plays || a.displayName.localeCompare(b.displayName));
 
+  // dominant expansion per base game (same ROW_NUMBER idiom as champRows);
+  // "usually with X" only when it rode along in strictly more than half the plays
+  const expTopRows = db
+    .prepare(
+      `WITH eu AS (
+         SELECT p.game_id AS base_id, pe.game_id AS exp_id, COUNT(*) AS n
+         FROM play_expansions pe JOIN plays p ON p.id = pe.play_id
+         WHERE p.crew_id = ? GROUP BY p.game_id, pe.game_id
+       ), ranked AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY base_id ORDER BY n DESC, exp_id) AS rn FROM eu
+       )
+       SELECT r.base_id, g.id, g.title, r.n FROM ranked r JOIN games g ON g.id = r.exp_id WHERE r.rn = 1`
+    )
+    .all(crew.id);
+  const expTopBy = new Map(expTopRows.map((r) => [r.base_id, { id: r.id, title: r.title, plays: r.n }]));
+
   const topGames = db
     .prepare(
       `SELECT g.id, g.title, g.image_url AS imageUrl, COUNT(*) AS plays
@@ -998,7 +1518,15 @@ app.get('/api/crews/:id/stats', requireAuth, (req, res) => {
        WHERE p.crew_id = ? GROUP BY g.id ORDER BY plays DESC, g.title COLLATE NOCASE LIMIT 8`
     )
     .all(crew.id)
-    .map((g) => ({ ...g, badge: playTier(g.plays), champion: champBy.get(g.id) || null }));
+    .map((g) => ({
+      ...g,
+      badge: playTier(g.plays),
+      champion: champBy.get(g.id) || null,
+      usuallyWith: (() => {
+        const u = expTopBy.get(g.id);
+        return u && u.plays * 2 > g.plays ? u : null;
+      })(),
+    }));
 
   // milestone wall: every game at 5+ plays
   const milestones = db
@@ -1100,6 +1628,40 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
     )
     .get(crew.id, game.id);
 
+  // "usually runs ~X min": MEDIAN of recorded durations — one marathon teach
+  // session shouldn't wreck the number (samples are tiny at family scale)
+  const durs = db
+    .prepare('SELECT duration_min AS d FROM plays WHERE crew_id = ? AND game_id = ? AND duration_min IS NOT NULL ORDER BY duration_min')
+    .all(crew.id, game.id)
+    .map((r) => r.d);
+  const typicalDurationMin = durs.length
+    ? durs.length % 2
+      ? durs[(durs.length - 1) / 2]
+      : Math.round((durs[durs.length / 2 - 1] + durs[durs.length / 2]) / 2)
+    : null;
+
+  // co-op record vs the game itself (only meaningful for coop-marked games)
+  const coop =
+    game.score_dir === 'coop'
+      ? db
+          .prepare(
+            `SELECT SUM(CASE WHEN coop_result = 'win' THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN coop_result = 'loss' THEN 1 ELSE 0 END) AS losses
+             FROM plays WHERE crew_id = ? AND game_id = ?`
+          )
+          .get(crew.id, game.id)
+      : null;
+
+  // which expansions ride along, and how often
+  const expansionUsage = db
+    .prepare(
+      `SELECT g.id, g.title, COUNT(*) AS plays
+       FROM play_expansions pe JOIN plays p ON p.id = pe.play_id JOIN games g ON g.id = pe.game_id
+       WHERE p.crew_id = ? AND p.game_id = ?
+       GROUP BY g.id ORDER BY plays DESC, g.title COLLATE NOCASE`
+    )
+    .all(crew.id, game.id);
+
   res.json({
     stats: {
       plays: summary.plays,
@@ -1108,6 +1670,10 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
       champion: champRow ? { id: champRow.id, displayName: champRow.displayName, wins: champRow.wins } : null,
       record,
       bestScore: bestRow ? { score: bestRow.score, displayName: bestRow.displayName, playedAt: bestRow.played_at } : null,
+      typicalDurationMin,
+      durationPlays: durs.length,
+      coop: coop ? { wins: coop.wins || 0, losses: coop.losses || 0 } : null,
+      expansionUsage,
     },
   });
 });
@@ -1170,6 +1736,25 @@ function eventsFor(crewId, userId, onlyEventId = null) {
        WHERE v.event_id IN (${ph}) ORDER BY g.title COLLATE NOCASE`
     )
     .all(...ids);
+  // what actually hit the table: plays linked to these nights. The winners
+  // LEFT JOIN fans out one row per winner; JS collapses back to one play.
+  const playRows = db
+    .prepare(
+      `SELECT p.event_id, p.id, p.game_id, p.played_at, g.title, g.image_url,
+              wu.display_name AS winner_name
+       FROM plays p JOIN games g ON g.id = p.game_id
+       LEFT JOIN play_players w ON w.play_id = p.id AND w.won = 1
+       LEFT JOIN users wu ON wu.id = w.user_id
+       WHERE p.event_id IN (${ph}) ORDER BY p.played_at, p.id, wu.display_name`
+    )
+    .all(...ids);
+  const playsByEvent = new Map();
+  for (const r of playRows) {
+    if (!playsByEvent.has(r.event_id)) playsByEvent.set(r.event_id, new Map());
+    const m = playsByEvent.get(r.event_id);
+    if (!m.has(r.id)) m.set(r.id, { id: r.id, gameId: r.game_id, title: r.title, imageUrl: r.image_url, playedAt: r.played_at, winners: [] });
+    if (r.winner_name) m.get(r.id).winners.push(r.winner_name);
+  }
   return events.map((e) => {
     const r = { in: [], maybe: [], out: [] };
     let myRsvp = null;
@@ -1197,6 +1782,7 @@ function eventsFor(crewId, userId, onlyEventId = null) {
       rsvps: r,
       myRsvp,
       votes: [...byGame.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
+      plays: [...(playsByEvent.get(e.id)?.values() || [])],
     };
   });
 }

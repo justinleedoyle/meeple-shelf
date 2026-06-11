@@ -162,6 +162,30 @@ CREATE TABLE IF NOT EXISTS game_tags (
   PRIMARY KEY (game_id, crew_id, tag)
 );
 CREATE INDEX IF NOT EXISTS idx_game_tags_crew ON game_tags(crew_id);
+
+CREATE TABLE IF NOT EXISTS live_plays (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  crew_id INTEGER NOT NULL REFERENCES crews(id) ON DELETE CASCADE,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+  host_user_id INTEGER REFERENCES users(id),
+  started_by INTEGER REFERENCES users(id),
+  started_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_live_plays_crew ON live_plays(crew_id);
+
+CREATE TABLE IF NOT EXISTS live_play_players (
+  live_play_id INTEGER NOT NULL REFERENCES live_plays(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  score INTEGER,
+  PRIMARY KEY (live_play_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS live_play_expansions (
+  live_play_id INTEGER NOT NULL REFERENCES live_plays(id) ON DELETE CASCADE,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  PRIMARY KEY (live_play_id, game_id)
+);
 `);
 
 // migrations for databases created before these columns existed
@@ -177,6 +201,10 @@ for (const ddl of [
   'ALTER TABLE plays ADD COLUMN host_user_id INTEGER REFERENCES users(id)',
   'ALTER TABLE library_entries ADD COLUMN due_date TEXT',
   "ALTER TABLE library_entries ADD COLUMN status TEXT NOT NULL DEFAULT 'owned'",
+  // SET NULL keeps the events→plays edge safe when a crew delete cascades both tables
+  'ALTER TABLE plays ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL',
+  'ALTER TABLE plays ADD COLUMN duration_min INTEGER',
+  'ALTER TABLE plays ADD COLUMN coop_result TEXT',
 ]) {
   try {
     db.exec(ddl);

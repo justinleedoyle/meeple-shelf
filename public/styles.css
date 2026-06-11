@@ -1134,3 +1134,90 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .ev-day { font-size: 22px; }
   .req-actions .req-due { width: 128px; }
 }
+
+/* ===== play pack: live mode, coop, durations, expansion stats ===== */
+
+.live-strip { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.live-strip:empty { display: none; }
+.live-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  min-height: 44px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(232, 163, 61, 0.55);
+  background: rgba(232, 163, 61, 0.1);
+  cursor: pointer;
+}
+.live-banner:hover { background: rgba(232, 163, 61, 0.16); }
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  flex: none;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 163, 61, 0.55); }
+  50% { box-shadow: 0 0 0 7px transparent; }
+}
+.live-banner .lb-body { flex: 1; min-width: 0; }
+.live-banner .lb-title { font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-banner .lb-meta { color: var(--muted); font-size: 12.5px; }
+.live-banner .lb-elapsed {
+  margin-left: auto;
+  flex: none;
+  font-family: ui-monospace, Menlo, monospace;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent-bright);
+}
+.live-banner .lb-elapsed.stale { color: var(--danger); }
+
+.live-timer {
+  text-align: center;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin: 6px 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.lv-stepper { display: flex; align-items: center; gap: 6px; }
+.lv-stepper button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.lv-stepper button:active { background: var(--card-hover); }
+.lv-stepper input.lv-score { width: 64px; text-align: center; font-size: 16px; padding: 9px 6px; }
+#lv-players .owner-row { flex-wrap: nowrap; }
+#lv-players .owner-main { overflow: hidden; }
+#lv-players .m-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* coop result chips (log modal + live finish) */
+#lp-players.coop-mode .lp-won { display: none; }
+#lp-coop { margin: 2px 0 6px; }
+.lp-coop-win.active { background: rgba(127, 176, 105, 0.14); border-color: var(--ok); color: var(--ok); }
+.lp-coop-loss.active { background: rgba(217, 108, 95, 0.12); border-color: var(--danger); color: var(--danger); }
+
+/* expansion usage line in the game detail modal */
+.gd-exp-usage { color: var(--muted); font-size: 12.5px; margin: 0 0 8px; }
+
+@media (max-width: 640px) {
+  .live-timer { font-size: 34px; }
+  .lv-stepper { gap: 4px; }
+}
