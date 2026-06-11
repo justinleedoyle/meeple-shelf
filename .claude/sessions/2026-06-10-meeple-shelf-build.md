@@ -208,3 +208,11 @@ Nothing — feature-complete as scoped.
   Snapshot carries 420-char descriptions (~154KB total).
 - Verified: local UI modal (Wingspan → stonemaiergames.com), prod endpoint
   smoke (7 Wonders → rprod.com), static overlay via dispatched click.
+
+## Phase 14: competitive audit (5-agent workflow)
+- Audited BG Stats, NemeStats, ScorePal, geekgroup.app, Kallax.io, MeepleStats,
+  CLZ, Libib, myTurn, Lend Engine, What2Play, Playpick, Dized, BGG + community
+  threads. ~40 transferable ideas → synthesized into ROADMAP.md (tiered).
+- Strongest converging signals: numeric scores/record book, Champion+Nemesis,
+  shelf-of-shame + weighted Surprise, game-night events w/ voting, loan due
+  dates, best-with-N-players filter (needs BGG token).
