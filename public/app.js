@@ -1821,10 +1821,10 @@ async function viewCrewDetail(id, sub) {
       <div class="stats-section">
         <h3>Standings</h3>
         ${grain === 'players' ? `
-        <div class="matrix-wrap"><table class="matrix">
+        <div class="matrix-wrap" id="player-board"><table class="matrix">
           <thead><tr><th style="text-align:left">Player</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="H-index">H</th></tr></thead>
           <tbody>
-            ${stats.playerStandings.map((s, i) => `<tr>
+            ${stats.playerStandings.map((s, i) => `<tr data-pp="${s.personId}" tabindex="0" title="See ${esc(s.name)}’s profile">
               <td>
                 <span class="medal">${s.wins > 0 && i < 3 ? medalIcon(i) : ''}</span> <span class="avatar" style="--c:${memberColor(s.householdId)};background:${memberColor(s.householdId)};display:inline-flex;width:22px;height:22px;font-size:10px;vertical-align:middle" title="${esc(s.householdName)}">${esc(s.householdName.slice(0, 2).toUpperCase())}</span> <span class="g-title">${esc(s.name)}</span>
                 ${s.nemesis ? `<div class="nemesis-line">${icon('swords')} nemesis: ${esc(s.nemesis.name)} (${s.nemesis.losses})</div>` : ''}
@@ -1941,6 +1941,25 @@ async function viewCrewDetail(id, sub) {
         if (!b || crewState.statsGrain === b.dataset.grain) return;
         crewState.statsGrain = b.dataset.grain;
         paint(); // fresh elements each paint — listeners can't stack
+      });
+    }
+    if ($('#player-board')) {
+      // row → profile; the tapped standings row seeds the modal header so it
+      // paints with zero latency. Exists only on the players grain.
+      const openProfile = (row) => {
+        const unit = stats.playerStandings.find((x) => x.personId === Number(row.dataset.pp));
+        if (unit) openPlayerProfileModal(id, unit);
+      };
+      $('#player-board').addEventListener('click', (e) => {
+        const row = e.target.closest('tr[data-pp]');
+        if (row && !clickedControl(e)) openProfile(row);
+      });
+      $('#player-board').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const row = e.target.closest('tr[data-pp]');
+        if (!row) return;
+        e.preventDefault(); // Space must not page-scroll under the opening modal
+        openProfile(row);
       });
     }
     if ($('#play-feed')) {
@@ -3343,6 +3362,109 @@ async function openGameModal(gameId, extras = {}) {
       } catch (err) { toast(err.message); }
     });
   }
+}
+
+// Crew-scoped profile for one Players-board unit. Read-only: never sets
+// modalDirty, so closing it never re-routes and the leaderboard (incl. the
+// grain toggle) stays exactly as the user left it. Numbers render verbatim
+// from the server — the profile must reconcile with the board to the digit.
+async function openPlayerProfileModal(crewId, unit) {
+  const c = memberColor(unit.householdId);
+  const tiles = (t) => `
+    <div class="gd-stats">
+      <div class="gd-tile"><div class="gd-num">${t.plays}</div><div class="gd-lbl">play${t.plays === 1 ? '' : 's'}</div></div>
+      <div class="gd-tile"><div class="gd-num">${t.wins}</div><div class="gd-lbl">win${t.wins === 1 ? '' : 's'}</div></div>
+      <div class="gd-tile"><div class="gd-num">${t.plays ? t.winRate + '%' : '—'}</div><div class="gd-lbl">win rate</div></div>
+    </div>`;
+
+  // header + totals are known from the tapped row — paint them instantly,
+  // skeleton only the fetched sections
+  const modalEl = openModal(`
+    <div class="modal-head">
+      <h2 class="pp-head">
+        <span class="avatar" style="--c:${c}">${esc(unit.name.slice(0, 2).toUpperCase())}</span>
+        <span class="pp-name">${esc(unit.name)}</span>
+        <span class="hh-tag">${esc(unit.householdName)}</span>
+      </h2>
+      <button class="modal-close" aria-label="Close">${icon('x')}</button>
+    </div>
+    <div class="modal-body" id="pp-body">
+      ${tiles(unit)}
+      <div class="skel skel-line" style="width:40%;margin-top:18px"></div>
+      <div class="skel skel-card" style="aspect-ratio:auto;height:140px;margin-top:10px"></div>
+      <div class="skel skel-line" style="width:55%;margin-top:14px"></div>
+      <div class="skel skel-line" style="width:70%"></div>
+    </div>`);
+  const gone = () => !document.contains(modalEl); // closed (or replaced) mid-fetch
+
+  let profile;
+  try {
+    ({ profile } = await api(`/crews/${crewId}/players/${unit.personId}/stats`));
+  } catch (e) {
+    if (gone()) return;
+    $('#pp-body', modalEl).innerHTML = emptyState('alert', 'Hmm', esc(e.message));
+    return;
+  }
+  if (gone()) return;
+
+  // the unit's own seat on a play — recents render THEIR outcome, not the table's
+  const mySeat = (p) => p.players.find((pl) => pl.person && pl.person.id === profile.person.id);
+  $('#pp-body', modalEl).innerHTML = `
+    ${tiles(profile.totals)}
+    ${profile.totals.nemesis ? `<div class="nemesis-line" style="margin-top:8px">${icon('swords')} nemesis: ${esc(profile.totals.nemesis.name)} (${profile.totals.nemesis.losses} loss${profile.totals.nemesis.losses === 1 ? '' : 'es'})</div>` : ''}
+    ${profile.person.retiredAt ? `<div class="r-meta" style="margin-top:6px">${icon('ghost')} Retired — their plays stay on the record.</div>` : ''}
+
+    <div class="stats-section" style="margin-top:16px">
+      <h3>Per-game record</h3>
+      <div class="matrix-wrap" id="pp-games"><table class="matrix">
+        <thead><tr><th style="text-align:left">Game</th><th>Plays</th><th>Wins</th><th>Win %</th><th title="Best score">Best</th></tr></thead>
+        <tbody>
+          ${profile.games.map((g) => `<tr>
+            <td><span class="g-title">${esc(g.title)}</span></td>
+            <td>${g.plays}</td>
+            <td>${g.wins}</td>
+            <td>${g.plays ? g.winRate + '%' : '—'}</td>
+            <td>${g.bestScore != null ? `${g.bestScore}${g.scoreDir === 'low' ? ' ↓' : ''}` : '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="stats-section">
+      <h3>Head-to-head</h3>
+      ${profile.headToHead.length ? `
+      <div class="search-results pp-h2h" style="max-height:none">
+        ${profile.headToHead.map((o) => `
+        <div class="result-row">
+          <span class="avatar" style="--c:${memberColor(o.householdId)}">${esc(o.name.slice(0, 2).toUpperCase())}</span>
+          <div class="r-grow">
+            <div class="r-title">${esc(o.name)} <span class="hh-tag">· ${esc(o.householdName)}</span></div>
+            <div class="r-meta">${o.playsTogether} shared play${o.playsTogether === 1 ? '' : 's'}</div>
+          </div>
+          <span class="pp-rec" title="wins–losses vs ${esc(o.name)}">${o.winsAgainst}–${o.lossesTo}</span>
+        </div>`).join('')}
+      </div>` : `<div class="r-meta">No head-to-head plays with other tagged players yet.</div>`}
+    </div>
+
+    <div class="stats-section" style="margin-bottom:0">
+      <h3>Recent plays</h3>
+      <div class="search-results" style="max-height:none">
+        ${profile.recentPlays.map((p) => {
+          const seat = mySeat(p);
+          return `
+        <div class="result-row">
+          ${p.game.imageUrl ? `<img class="r-thumb" loading="lazy" src="${esc(p.game.imageUrl)}" alt="" onerror="this.remove()">` : ''}
+          <div class="r-grow">
+            <div class="r-title">${esc(p.game.title)} <span class="r-year">${fmtDay(p.playedAt)}${p.event ? ` · ${esc(p.event.title)}` : ''}</span></div>
+            <div class="r-meta">${p.coopResult
+              ? (p.coopResult === 'win' ? `${icon('trophy')} team win` : `${icon('swords')} game won`)
+              : (seat && seat.won ? `${icon('crown')} won` : 'played')}${seat && seat.score != null ? ` · ${seat.score}` : ''}</div>
+            ${p.expansions?.length ? `<div class="r-meta">+ ${p.expansions.map((x) => esc(expShortTitle(x))).join(', ')}</div>` : ''}
+          </div>
+        </div>`;
+        }).join('')}
+      </div>
+    </div>`;
 }
 
 // GitHub-style activity heatmap from a sparse { 'YYYY-MM-DD': count } map.

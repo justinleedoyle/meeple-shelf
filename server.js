@@ -1128,7 +1128,9 @@ function eventAttachError(eventId, crewId) {
   return null;
 }
 
-function playsFor(crewId, limit = 100, playId = null) {
+function playsFor(crewId, limit = 100, playId = null, personId = null) {
+  // personId narrows to plays where that person is seated (player profiles) —
+  // NULL keeps the filter a no-op for every existing call site
   const rows = db
     .prepare(
       `SELECT p.id AS play_id, p.played_at, p.notes AS play_notes,
@@ -1139,9 +1141,10 @@ function playsFor(crewId, limit = 100, playId = null) {
        LEFT JOIN users hu ON hu.id = p.host_user_id
        LEFT JOIN events e ON e.id = p.event_id
        WHERE p.crew_id = ? AND (? IS NULL OR p.id = ?)
+         AND (? IS NULL OR EXISTS (SELECT 1 FROM play_players f WHERE f.play_id = p.id AND f.person_id = ?))
        ORDER BY p.played_at DESC, p.id DESC LIMIT ?`
     )
-    .all(crewId, playId, playId, limit);
+    .all(crewId, playId, playId, personId, personId, limit);
   if (!rows.length) return [];
   const ids = rows.map((r) => r.play_id);
   const players = db
@@ -2214,6 +2217,141 @@ app.get('/api/crews/:id/games/:gameId/stats', requireAuth, (req, res) => {
       playerChampion: playerChampion
         ? { personId: playerChampion.personId, name: playerChampion.name, householdId: playerChampion.householdId, householdName: playerChampion.householdName, wins: playerChampion.wins }
         : null,
+    },
+  });
+});
+
+// player profile: one Players-board unit, crew-scoped. Every number here is
+// the board's own SQL pinned to one person — reconciliation with the unit's
+// playerStandings row is the feature's contract, so any change to the board's
+// roster/membership predicates must be mirrored here in lockstep.
+app.get('/api/crews/:id/players/:personId/stats', requireAuth, (req, res) => {
+  const crew = memberOfCrew(req, res);
+  if (!crew) return;
+  // gate = the playerStandings roster predicate pinned to one person: current-
+  // member household + >=1 tagged play in THIS crew, retired included. One
+  // identical 404 for every miss — the body must not become an existence
+  // oracle for other households' people lists.
+  const person = db
+    .prepare(
+      `SELECT per.id, per.name, per.retired_at, per.household_id AS householdId, u.display_name AS householdName
+       FROM people per
+       JOIN crew_members cm ON cm.user_id = per.household_id AND cm.crew_id = ?
+       JOIN users u ON u.id = per.household_id
+       WHERE per.id = ?
+         AND EXISTS (SELECT 1 FROM play_players pp JOIN plays p ON p.id = pp.play_id
+                     WHERE p.crew_id = ? AND pp.person_id = per.id)`
+    )
+    .get(crew.id, req.params.personId, crew.id);
+  if (!person) return res.status(404).json({ error: 'No player profile in this crew' });
+
+  const totals = db
+    .prepare(
+      `SELECT COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins
+       FROM play_players pp JOIN plays p ON p.id = pp.play_id
+       WHERE p.crew_id = ? AND pp.person_id = ?`
+    )
+    .get(crew.id, person.id);
+
+  const hIndex = db
+    .prepare(
+      `SELECT COUNT(*) AS h FROM (
+         SELECT COUNT(*) AS n, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) AS rnk
+         FROM plays p JOIN play_players pp ON pp.play_id = p.id
+         WHERE p.crew_id = ? AND pp.person_id = ?
+         GROUP BY p.game_id
+       ) t WHERE t.n >= t.rnk`
+    )
+    .get(crew.id, person.id).h;
+
+  // the board's nemesis CTE with the loser pinned — same tie-break, so this is
+  // the playerStandings nemesis object verbatim
+  const nemesis = db
+    .prepare(
+      `WITH beat AS (
+         SELECT winner.person_id AS winner_id, COUNT(*) AS losses,
+                MAX(p.played_at || '|' || printf('%010d', p.id)) AS last_loss
+         FROM plays p
+         JOIN play_players loser ON loser.play_id = p.id AND loser.won = 0 AND loser.person_id = ?
+         JOIN play_players winner ON winner.play_id = p.id AND winner.won = 1 AND winner.person_id > 0
+         JOIN people wper ON wper.id = winner.person_id
+         JOIN crew_members cmw ON cmw.crew_id = p.crew_id AND cmw.user_id = wper.household_id
+         WHERE p.crew_id = ?
+         GROUP BY winner.person_id
+       )
+       SELECT b.winner_id AS personId, per.name, per.household_id AS householdId, b.losses
+       FROM beat b JOIN people per ON per.id = b.winner_id
+       ORDER BY b.losses DESC, b.last_loss DESC, b.winner_id LIMIT 1`
+    )
+    .get(person.id, crew.id);
+
+  // own rows partitioned by game — no membership/coop/retired filters here:
+  // the unit's rows always count in full or totals stop reconciling (R20)
+  const games = db
+    .prepare(
+      `SELECT g.id AS gameId, g.title, g.image_url AS imageUrl, g.score_dir,
+              COUNT(*) AS plays, COALESCE(SUM(pp.won), 0) AS wins,
+              CASE WHEN g.score_dir = 'low' THEN MIN(pp.score) ELSE MAX(pp.score) END AS bestScore,
+              COUNT(pp.score) AS scoredPlays,
+              MAX(p.played_at) AS lastPlayedAt
+       FROM play_players pp
+       JOIN plays p ON p.id = pp.play_id
+       JOIN games g ON g.id = p.game_id
+       WHERE p.crew_id = ? AND pp.person_id = ?
+       GROUP BY g.id
+       ORDER BY plays DESC, wins DESC, g.title COLLATE NOCASE, g.id`
+    )
+    .all(crew.id, person.id)
+    .map((r) => ({
+      gameId: r.gameId,
+      title: r.title,
+      imageUrl: r.imageUrl,
+      scoreDir: r.score_dir || 'high',
+      plays: r.plays,
+      wins: r.wins,
+      winRate: r.plays ? Math.round((r.wins / r.plays) * 100) : 0,
+      bestScore: r.bestScore,
+      scoredPlays: r.scoredPlays,
+      lastPlayedAt: r.lastPlayedAt,
+    }));
+
+  // head-to-head: co-seated tagged units from current-member households. No
+  // coop_result filter — coopResult forces identical won flags on every seat,
+  // so co-op plays land in playsTogether and can never decide a pair (the
+  // board's nemesis takes the same emergent posture). Both-won ties and
+  // both-lost plays are the gap between playsTogether and wins+losses.
+  const headToHead = db
+    .prepare(
+      `SELECT b.person_id AS personId, per.name, per.household_id AS householdId, u.display_name AS householdName,
+              COUNT(*) AS playsTogether,
+              SUM(CASE WHEN a.won = 1 AND b.won = 0 THEN 1 ELSE 0 END) AS winsAgainst,
+              SUM(CASE WHEN b.won = 1 AND a.won = 0 THEN 1 ELSE 0 END) AS lossesTo
+       FROM play_players a
+       JOIN plays p ON p.id = a.play_id
+       JOIN play_players b ON b.play_id = a.play_id AND b.person_id > 0 AND b.person_id != a.person_id
+       JOIN people per ON per.id = b.person_id
+       JOIN users u ON u.id = per.household_id
+       JOIN crew_members cm ON cm.crew_id = p.crew_id AND cm.user_id = per.household_id
+       WHERE p.crew_id = ? AND a.person_id = ?
+       GROUP BY b.person_id
+       ORDER BY playsTogether DESC, winsAgainst DESC, per.name COLLATE NOCASE, b.person_id`
+    )
+    .all(crew.id, person.id);
+
+  res.json({
+    profile: {
+      person: { id: person.id, name: person.name, retiredAt: person.retired_at || null },
+      household: { id: person.householdId, displayName: person.householdName },
+      totals: {
+        plays: totals.plays,
+        wins: totals.wins,
+        winRate: totals.plays ? Math.round((totals.wins / totals.plays) * 100) : 0,
+        hIndex,
+        nemesis: nemesis ? { personId: nemesis.personId, name: nemesis.name, householdId: nemesis.householdId, losses: nemesis.losses } : null,
+      },
+      games,
+      headToHead,
+      recentPlays: playsFor(crew.id, 10, null, person.id),
     },
   });
 });

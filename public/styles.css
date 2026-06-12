@@ -1252,6 +1252,36 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
   .person-chip, .lp-won, #grain-seg button { min-height: 44px; }
 }
 
+/* ===== player profiles ===== */
+
+/* the Players-board row IS the tap target — full row, >=44px (td height acts
+   as min-height). No role="button" on the tr: that would strip the standings
+   cells from the accessibility tree (children-presentational + label override). */
+#player-board tbody tr { cursor: pointer; }
+#player-board tbody td { height: 44px; }
+#player-board tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* WebKit never paints outlines on table-row boxes — draw the ring on the cells */
+#player-board tbody tr:focus-visible td { box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+
+/* modal header: color avatar + person name + household tag on one shrinkable line */
+.pp-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pp-head .avatar { flex: none; }
+.pp-head .pp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-head .hh-tag { flex: none; font-size: 12px; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* per-game table: narrower than the base matrix so phones see numbers, not just titles */
+#pp-games table.matrix { min-width: 420px; }
+#pp-games th:first-child, #pp-games td:first-child { max-width: 150px; }
+#pp-games td:first-child .g-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* head-to-head rows */
+.pp-h2h .avatar { flex: none; }
+.pp-rec { font-weight: 800; font-size: 14.5px; font-variant-numeric: tabular-nums; flex: none; }
+
+/* standalone meta lines (retired note, empty H2H) — the global .r-meta rule
+   is scoped under .result-row and never reaches these */
+#pp-body .r-meta { color: var(--muted); font-size: 12.5px; }
+
 /* ===== pwa: standalone safe areas ===== */
 #nav { padding-top: calc(12px + env(safe-area-inset-top, 0px)); } /* id beats the element rule; #tabbar's own padding shorthand is untouched */
 .modal-backdrop { padding-top: calc(7vh + env(safe-area-inset-top, 0px)); }
