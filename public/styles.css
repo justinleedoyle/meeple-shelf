@@ -1251,3 +1251,14 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 480px; }
 @media (max-width: 640px) {
   .person-chip, .lp-won, #grain-seg button { min-height: 44px; }
 }
+
+/* ===== pwa: standalone safe areas ===== */
+#nav { padding-top: calc(12px + env(safe-area-inset-top, 0px)); } /* id beats the element rule; #tabbar's own padding shorthand is untouched */
+.modal-backdrop { padding-top: calc(7vh + env(safe-area-inset-top, 0px)); }
+@media (max-width: 640px) {
+  /* the id selector outranks the element rules inside media queries too —
+     every base value the #nav rule overrides needs its mobile companion */
+  #nav { padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+  .modal-backdrop { padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+  #toast-root { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+}

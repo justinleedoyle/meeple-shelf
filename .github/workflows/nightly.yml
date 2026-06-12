@@ -33,6 +33,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Public repo: GitHub auto-disables scheduled workflows after 60 days
+      # without repo activity, and a stable shelf produces zero commits.
+      # Re-enabling (even when already enabled) resets that clock — keep both
+      # schedules (this one AND the game-night reminders) alive. First so a
+      # Fly outage can't skip it.
+      - name: Keep schedules alive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly.yml/enable"
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/remind.yml/enable"
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Wake the machine

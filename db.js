@@ -199,6 +199,18 @@ CREATE TABLE IF NOT EXISTS people (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_people_household ON people(household_id);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_used_at TEXT,
+  fail_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
 `);
 
 // migrations for databases created before these columns existed
@@ -218,6 +230,7 @@ for (const ddl of [
   'ALTER TABLE plays ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL',
   'ALTER TABLE plays ADD COLUMN duration_min INTEGER',
   'ALTER TABLE plays ADD COLUMN coop_result TEXT',
+  'ALTER TABLE events ADD COLUMN reminded_at TEXT',
 ]) {
   try {
     db.exec(ddl);

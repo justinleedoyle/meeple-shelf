@@ -1,4 +1,6 @@
 import express from 'express';
+import webpush from 'web-push';
+import { timingSafeEqual, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,6 +134,129 @@ function validateGameInput(body) {
     imageUrl: imageUrl || null,
     bggId: intOrNull(body.bggId, 1, 99999999),
   };
+}
+
+// ---------- web push (notifications) ----------
+// Opt-in per device. Sends are fire-and-forget; without VAPID keys (local dev,
+// tests) the whole transport no-ops while the intent log keeps recording, so
+// trigger plumbing stays testable keyless.
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || null;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || null;
+const PUSH_ENABLED = !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+const PUSH_TTL_S = 86400; // a day-old buzz is still worth seeing next morning
+if (PUSH_ENABLED) {
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://meeple-shelf.fly.dev', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log('Push: VAPID keys loaded — notifications enabled');
+} else {
+  console.log('Push: VAPID keys not set — notifications disabled (sends no-op; intent log still records)');
+}
+
+// the test seam: every send intent lands here SYNCHRONOUSLY, keys or not, so
+// fetch-based tests can assert "this action would have notified X,Y" the
+// instant the triggering response returns. Read via /api/push/_log (dev only).
+const notifyLog = [];
+
+// payload contract: { title, body, url, tag } — display strings only. These
+// transit Apple/Google/Mozilla relays (encrypted, but they render on lock
+// screens): NEVER include reset codes, invite codes, or free-text notes.
+// Returns the delivery promise; request handlers ignore it (fire-and-forget),
+// the cron awaits it so the auto-stop machine can't kill in-flight sends.
+function sendPushToUsers(userIds, payload) {
+  const ids = [...new Set((userIds || []).map(Number).filter(Number.isInteger))];
+  notifyLog.push({ ts: new Date().toISOString(), userIds: ids, payload });
+  if (notifyLog.length > 100) notifyLog.shift();
+  if (!PUSH_ENABLED || !ids.length) return Promise.resolve();
+  return deliverPush(ids, payload);
+}
+
+async function deliverPush(ids, payload) {
+  try {
+    const ph = ids.map(() => '?').join(',');
+    const subs = db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${ph})`).all(...ids);
+    const body = JSON.stringify(payload);
+    await Promise.allSettled(
+      subs.map(async (s) => {
+        try {
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { TTL: PUSH_TTL_S });
+          db.prepare("UPDATE push_subscriptions SET last_used_at = datetime('now'), fail_count = 0 WHERE id = ?").run(s.id);
+        } catch (err) {
+          const code = err?.statusCode;
+          // 404/410 = subscription gone; 401/403 = VAPID mismatch (rotation) —
+          // both permanent, the row self-purges. Everything else gets a strike;
+          // 8 straight failures (no success ever resets to 0) is a zombie row.
+          if (code === 404 || code === 410 || code === 401 || code === 403) {
+            db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id);
+          } else {
+            db.prepare('UPDATE push_subscriptions SET fail_count = fail_count + 1 WHERE id = ?').run(s.id);
+            db.prepare('DELETE FROM push_subscriptions WHERE id = ? AND fail_count >= 8').run(s.id);
+          }
+        }
+      })
+    );
+  } catch {
+    /* fire-and-forget: a lost send is acceptable; the in-app badge is the backstop */
+  }
+}
+
+app.get('/api/push/public-key', (req, res) => {
+  // public on purpose: a VAPID public key is public material by definition.
+  // Gated on PUSH_ENABLED (not key presence): a half-configured server (public
+  // key set, private key typo'd) must read as "off", or clients subscribe,
+  // show "On for this device", and nothing ever delivers.
+  res.json({ key: PUSH_ENABLED ? VAPID_PUBLIC_KEY : null });
+});
+
+app.post('/api/push/subscribe', requireAuth, (req, res) => {
+  const s = req.body.subscription || req.body; // accept raw PushSubscription.toJSON() or wrapped
+  const endpoint = String(s?.endpoint || '');
+  const p256dh = String(s?.keys?.p256dh || '');
+  const auth = String(s?.keys?.auth || '');
+  if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000 || !p256dh || p256dh.length > 200 || !auth || auth.length > 100) {
+    return res.status(400).json({ error: "That subscription doesn't look right" });
+  }
+  // THE REBIND RULE: an endpoint re-posted by a different login moves to the
+  // new user — on a shared family iPad, pushes must follow the current login
+  db.prepare(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, last_used_at) VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth,
+       last_used_at = excluded.last_used_at, fail_count = 0`
+  ).run(req.user.id, endpoint, p256dh, auth);
+  res.json({ ok: true });
+});
+
+app.post('/api/push/unsubscribe', requireAuth, (req, res) => {
+  const endpoint = String(req.body.endpoint || '');
+  if (!endpoint || endpoint.length > 1000) return res.status(400).json({ error: "That subscription doesn't look right" });
+  // user-scoped: endpoint possession alone must not let one login silence
+  // another's device. No zombie risk on shared devices — a row bound to a
+  // different user is exactly one the next login's subscribe re-binds anyway.
+  db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(endpoint, req.user.id);
+  res.json({ ok: true });
+});
+
+// self-only test push — the "is my phone wired up?" button in Account
+app.post('/api/push/test', requireAuth, (req, res) => {
+  sendPushToUsers([req.user.id], {
+    title: 'Meeple Shelf',
+    body: 'Notifications are working on this device.',
+    url: '/#/library',
+    tag: 'push-test',
+  });
+  res.json({ ok: true, enabled: PUSH_ENABLED });
+});
+
+// dev-only seam inspection: NODE_ENV gating (not key-absence) so a prod
+// secrets mishap can never expose endpoints or cross-household intent
+if (!PROD) {
+  app.get('/api/push/_log', requireAuth, (req, res) => {
+    const subs = db.prepare('SELECT user_id AS userId, endpoint FROM push_subscriptions ORDER BY id').all();
+    res.json({ enabled: PUSH_ENABLED, log: notifyLog, subs });
+  });
+  app.delete('/api/push/_log', requireAuth, (req, res) => {
+    notifyLog.length = 0;
+    res.json({ ok: true });
+  });
 }
 
 // ---------- auth routes ----------
@@ -353,6 +478,36 @@ function crewmateIds(userId) {
     )
     .all(userId)
     .map((r) => r.id);
+}
+
+// ---------- push triggers (copy helpers) ----------
+
+// code-point clip: slicing UTF-16 units can strand half a surrogate pair and
+// render U+FFFD in the banner when a title ends in an emoji
+const clip = (s, n = 64) => {
+  const cp = [...String(s)];
+  return cp.length > n ? cp.slice(0, n - 1).join('') + '…' : s;
+};
+// noon-UTC trick: bare YYYY-MM-DD strings must not TZ-shift to the wrong day
+const shortDate = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+// "today" in the household's timezone, not UTC: after 5pm Pacific, UTC has
+// already rolled over and date comparisons would call tomorrow "today"
+// (en-CA locale formats as YYYY-MM-DD)
+const laToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+const time12 = (t) => {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hr = h % 12 || 12;
+  return `${hr}:${String(m).padStart(2, '0')} ${ampm}`;
+};
+function crewRecipients(crewId, excludeIds = []) {
+  const skip = new Set(excludeIds);
+  return db
+    .prepare('SELECT user_id FROM crew_members WHERE crew_id = ?')
+    .all(crewId)
+    .map((r) => r.user_id)
+    .filter((id) => !skip.has(id));
 }
 
 app.get('/api/crewmates', requireAuth, (req, res) => {
@@ -1422,6 +1577,22 @@ app.post('/api/crews/:id/live-plays', requireAuth, (req, res) => {
       db.prepare('INSERT INTO live_play_expansions (live_play_id, game_id) VALUES (?, ?)').run(liveId, xid);
     }
   })();
+  // the roster IS the table — never buzz a pocket at the game. One login per
+  // household means seated/at-home siblings are indistinguishable: quiet wins.
+  // "At the table" also covers the venue (host) and, for an event-attached
+  // session, everyone who RSVP'd 'in' — they're in the room at another table.
+  const seated = new Set([req.user.id, hostId, ...entries.map((e) => e.id)]);
+  if (eventId != null) {
+    for (const r of db.prepare("SELECT user_id FROM event_rsvps WHERE event_id = ? AND response = 'in'").all(eventId)) {
+      seated.add(r.user_id);
+    }
+  }
+  sendPushToUsers(memberIds.filter((id) => !seated.has(id)), {
+    title: clip(`${game.title} just hit the table`),
+    body: `${req.user.display_name} started a live session — tap to watch the scores.`,
+    tag: `live-${crew.id}`,
+    url: `/#/crew/${crew.id}`,
+  });
   res.status(201).json({ livePlay: livePlaysFor(crew.id, Number(liveId))[0] });
 });
 
@@ -2182,6 +2353,17 @@ app.post('/api/crews/:id/events', requireAuth, (req, res) => {
       .run(crew.id, title, date, time, hostId, notes, req.user.id).lastInsertRowid;
     db.prepare("INSERT INTO event_rsvps (event_id, user_id, response) VALUES (?, ?, 'in')").run(eventId, req.user.id); // planning it means you're in
   })();
+  // date rides the BODY: a 60-char title + ' — ' would clip it out of a
+  // 64-char title. Backfilled past nights (attaching last weekend's plays)
+  // don't push — "In or out?" for a night that already happened is noise.
+  if (date >= laToday()) {
+    sendPushToUsers(crewRecipients(crew.id, [req.user.id]), {
+      title: clip(title),
+      body: `${req.user.display_name} planned it for ${shortDate(date)}${time ? ` at ${time12(time)}` : ''}. In or out?`,
+      tag: `event-${eventId}`,
+      url: `/#/crew/${crew.id}/nights`,
+    });
+  }
   res.status(201).json({ event: eventsFor(crew.id, req.user.id, Number(eventId))[0] });
 });
 
@@ -2226,9 +2408,43 @@ app.patch('/api/events/:id', requireAuth, (req, res) => {
     sets.host_user_id = hostId;
   }
   if (req.body.canceled !== undefined) sets.canceled_at = req.body.canceled ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null;
+  // a rescheduled night earns a fresh day-of reminder
+  if (sets.event_date && sets.event_date !== event.event_date) sets.reminded_at = null;
   if (Object.keys(sets).length) {
     db.prepare(`UPDATE events SET ${Object.keys(sets).map((k) => k + ' = ?').join(', ')} WHERE id = ?`)
       .run(...Object.values(sets), event.id);
+  }
+  // only material TRANSITIONS buzz — cancel, un-cancel, a new date. Title/
+  // time/notes churn stays silent. Dates ride the BODY (clip-proof), and all
+  // three reuse tag event-<id> so each replaces the stale banner in the tray.
+  const finalTitle = sets.title !== undefined ? sets.title : event.title;
+  const finalDate = sets.event_date || event.event_date;
+  const finalTime = sets.start_time !== undefined ? sets.start_time : event.start_time;
+  const dateChanged = !!(sets.event_date && sets.event_date !== event.event_date);
+  if ('canceled_at' in sets && sets.canceled_at && !event.canceled_at) {
+    sendPushToUsers(crewRecipients(event.crew_id, [req.user.id]), {
+      title: clip(`Called off: ${finalTitle}`),
+      body: `${req.user.display_name} called it off — was set for ${shortDate(finalDate)}.`,
+      tag: `event-${event.id}`,
+      url: `/#/crew/${event.crew_id}/nights`,
+    });
+  } else if ('canceled_at' in sets && sets.canceled_at === null && event.canceled_at) {
+    sendPushToUsers(crewRecipients(event.crew_id, [req.user.id]), {
+      title: clip(`Back on: ${finalTitle}`),
+      body: `${req.user.display_name} un-canceled it for ${shortDate(finalDate)}${finalTime ? ` at ${time12(finalTime)}` : ''}. In or out?`,
+      tag: `event-${event.id}`,
+      url: `/#/crew/${event.crew_id}/nights`,
+    });
+  } else if (dateChanged && !event.canceled_at && finalDate >= laToday()) {
+    // a reschedule is the one edit where silence strands people on the old
+    // date (the un-tapped creation banner still shows it) — incl. moves to
+    // "tonight" after the morning cron already ran
+    sendPushToUsers(crewRecipients(event.crew_id, [req.user.id]), {
+      title: clip(`New date: ${finalTitle}`),
+      body: `${req.user.display_name} moved it to ${shortDate(finalDate)}${finalTime ? ` at ${time12(finalTime)}` : ''}. In or out?`,
+      tag: `event-${event.id}`,
+      url: `/#/crew/${event.crew_id}/nights`,
+    });
   }
   res.json({ event: eventsFor(event.crew_id, req.user.id, event.id)[0] });
 });
@@ -2266,6 +2482,61 @@ app.post('/api/events/:id/vote', requireAuth, (req, res) => {
     db.prepare('INSERT INTO event_votes (event_id, game_id, user_id) VALUES (?, ?, ?)').run(event.id, gameId, req.user.id);
   }
   res.json({ event: eventsFor(event.crew_id, req.user.id, event.id)[0] });
+});
+
+// day-of game-night reminder, curled by .github/workflows/remind.yml each
+// morning (the HTTPS request itself wakes the auto-stopped machine).
+// Machine-to-machine: guarded by CRON_SECRET, not sessions.
+app.post('/api/cron/remind', rateLimitAuth, async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return res.status(503).json({ error: 'Reminders not configured' });
+  const got = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  // hash-then-compare sidesteps timingSafeEqual's equal-length requirement
+  const a = createHash('sha256').update(got).digest();
+  const b = createHash('sha256').update(secret).digest();
+  if (!timingSafeEqual(a, b)) return res.status(401).json({ error: 'Nope' });
+
+  // Pacific "today", not UTC: a workflow_dispatch test click at 6pm PT is
+  // already UTC-tomorrow, which would push "Tonight:" a day early AND burn
+  // the real reminder (reminded_at marks before sending)
+  const today = laToday();
+  const events = db
+    .prepare(
+      `SELECT e.*, c.name AS crew_name FROM events e JOIN crews c ON c.id = e.crew_id
+       WHERE e.event_date = ? AND e.canceled_at IS NULL AND e.reminded_at IS NULL`
+    )
+    .all(today);
+  // mark BEFORE sending: a crash loses a reminder rather than ever duplicating one
+  if (events.length) {
+    const ph = events.map(() => '?').join(',');
+    db.prepare(`UPDATE events SET reminded_at = datetime('now') WHERE id IN (${ph})`).run(...events.map((e) => e.id));
+  }
+  let notified = 0;
+  const sends = [];
+  for (const ev of events) {
+    // 'out' said no — buzzing them is noise; 'in' wants the nudge, silent needs it
+    const outs = db
+      .prepare("SELECT user_id FROM event_rsvps WHERE event_id = ? AND response = 'out'")
+      .all(ev.id)
+      .map((r) => r.user_id);
+    const recipients = crewRecipients(ev.crew_id, outs);
+    const inCount = db.prepare("SELECT COUNT(*) AS n FROM event_rsvps WHERE event_id = ? AND response = 'in'").get(ev.id).n;
+    const host = ev.host_user_id
+      ? db.prepare('SELECT display_name FROM users WHERE id = ?').get(ev.host_user_id)?.display_name
+      : null;
+    sends.push(sendPushToUsers(recipients, {
+      title: clip(`Tonight: ${ev.title}`),
+      body: `${host ? `${host} is hosting. ` : ''}${ev.start_time ? `Starts ${time12(ev.start_time)}. ` : ''}${inCount} in so far — tap for the plan.`,
+      tag: `event-${ev.id}`,
+      url: `/#/crew/${ev.crew_id}/nights`,
+    }));
+    notified += recipients.length;
+  }
+  // unlike request handlers, the cron AWAITS delivery: once curl gets the 200
+  // the auto-stop machine has no inbound traffic, and reminders never retry
+  // (reminded_at is already marked) — don't let idle-stop kill the sends
+  await Promise.allSettled(sends);
+  res.json({ ok: true, eventsToday: events.length, notified });
 });
 
 // ---------- borrow requests (ask → owner one-tap approves → loan opens) ----------
@@ -2315,6 +2586,15 @@ app.post('/api/games/:id/borrow-requests', requireAuth, (req, res) => {
     .prepare('INSERT INTO borrow_requests (game_id, owner_id, requester_id, note) VALUES (?, ?, ?, ?)')
     .run(game.id, ownerId, req.user.id, note);
   const row = db.prepare(`${BORROW_SELECT} WHERE br.id = ?`).get(info.lastInsertRowid);
+  const pendingFromThem = db
+    .prepare("SELECT COUNT(*) AS n FROM borrow_requests WHERE owner_id = ? AND requester_id = ? AND status = 'pending'")
+    .get(ownerId, req.user.id).n;
+  sendPushToUsers([ownerId], {
+    title: clip(`${row.requester_name} wants to borrow ${row.title}`),
+    body: pendingFromThem > 1 ? `That's ${pendingFromThem} asks from them waiting on you.` : 'Tap to lend it or say not right now.',
+    tag: `borrow-from-${row.requester_id}`,
+    url: '/#/account',
+  }); // note text never rides the payload
   res.status(201).json({ request: borrowRequestToJson(row) });
 });
 
@@ -2341,6 +2621,7 @@ app.post('/api/borrow-requests/:id/respond', requireAuth, (req, res) => {
   if (r.owner_id !== req.user.id) return res.status(403).json({ error: 'Only the owner can answer this request' });
   if (r.status !== 'pending') return res.status(409).json({ error: 'This request was already answered' });
   const action = String(req.body.action || '');
+  let autoDeclined = []; // {id, requester_id} rows the approve cascade closes
   if (action === 'decline') {
     db.prepare("UPDATE borrow_requests SET status = 'declined', resolved_at = datetime('now') WHERE id = ?").run(r.id);
   } else if (action === 'approve') {
@@ -2356,7 +2637,11 @@ app.post('/api/borrow-requests/:id/respond', requireAuth, (req, res) => {
       db.prepare('UPDATE library_entries SET loaned_to = ?, due_date = ? WHERE id = ?').run(r.requester_id, dueDate, entry.id);
       logLoanChange(r.game_id, r.owner_id, entry.loaned_to, r.requester_id);
       db.prepare("UPDATE borrow_requests SET status = 'approved', resolved_at = datetime('now') WHERE id = ?").run(r.id);
-      // same copy can't go two places: other open asks for it close out
+      // same copy can't go two places: other open asks for it close out —
+      // and their askers get the same decline push a manual no would send
+      autoDeclined = db
+        .prepare("SELECT id, requester_id FROM borrow_requests WHERE game_id = ? AND owner_id = ? AND status = 'pending' AND id != ?")
+        .all(r.game_id, r.owner_id, r.id);
       db.prepare(
         "UPDATE borrow_requests SET status = 'declined', resolved_at = datetime('now') WHERE game_id = ? AND owner_id = ? AND status = 'pending' AND id != ?"
       ).run(r.game_id, r.owner_id, r.id);
@@ -2365,6 +2650,30 @@ app.post('/api/borrow-requests/:id/respond', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Action must be approve or decline' });
   }
   const row = db.prepare(`${BORROW_SELECT} WHERE br.id = ?`).get(r.id);
+  const respDue = action === 'approve' ? dateOrNull(req.body.dueDate) : null;
+  // tag is per-REQUEST: an owner clearing a queue (yes to Catan, no to
+  // Wingspan) must not have the second banner replace the unread first
+  sendPushToUsers([r.requester_id], action === 'approve'
+    ? {
+        title: clip(`${row.owner_name} said yes to ${row.title}`),
+        body: respDue ? `Lent to you — due back ${shortDate(respDue)}.` : 'Lent to you — grab it next time you see them.',
+        tag: `borrow-answer-${r.id}`,
+        url: '/#/account',
+      }
+    : {
+        title: clip(`${row.owner_name} can't lend ${row.title} right now`),
+        body: 'Maybe next time — it stays on their shelf.',
+        tag: `borrow-answer-${r.id}`,
+        url: '/#/account',
+      });
+  for (const lost of autoDeclined) {
+    sendPushToUsers([lost.requester_id], {
+      title: clip(`${row.owner_name} can't lend ${row.title} right now`),
+      body: 'Maybe next time — it stays on their shelf.',
+      tag: `borrow-answer-${lost.id}`,
+      url: '/#/account',
+    });
+  }
   res.json({ request: borrowRequestToJson(row) });
 });
 

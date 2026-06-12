@@ -318,6 +318,7 @@ function renderNav(active) {
     <button class="btn btn-ghost btn-sm seg-txt" id="logout-btn">Log out</button>`;
   $('#account-btn').onclick = openAccountModal;
   $('#logout-btn').onclick = async () => {
+    await unbindPushOnLogout(); // while the session can still authorize it
     await api('/logout', { method: 'POST' });
     state.user = null;
     location.hash = '#/welcome';
@@ -327,7 +328,7 @@ function renderNav(active) {
 async function route() {
   closeModal();
   const hash = location.hash.replace(/^#\/?/, '');
-  const [page, arg] = hash.split('/');
+  const [page, arg, sub] = hash.split('/');
   renderNav(page || 'library');
   // show a skeleton only when a load is actually slow (e.g. server cold-wake)
   const skelTimer = setTimeout(() => { appEl.innerHTML = skeletonHtml(); }, 150);
@@ -335,8 +336,17 @@ async function route() {
     if (page === 'u' && arg) return await viewPublicShelf(arg);
     if (!state.user) return viewWelcome();
     if (page === 'welcome') { location.hash = '#/library'; return; }
+    if (page === 'account') {
+      // notification deep-link alias: borrow requests live only in the modal.
+      // replaceState (not a hash write) — a hash write would route() again
+      // and closeModal() the modal we're about to open.
+      await viewLibrary();
+      history.replaceState(null, '', '#/library');
+      openAccountModal();
+      return;
+    }
     if (page === 'crews') return await viewCrews();
-    if (page === 'crew' && arg) return await viewCrewDetail(Number(arg));
+    if (page === 'crew' && arg) return await viewCrewDetail(Number(arg), sub);
     return await viewLibrary();
   } catch (e) {
     if (e.status === 401) {
@@ -349,6 +359,193 @@ async function route() {
   } finally {
     clearTimeout(skelTimer);
   }
+}
+
+// ===================== web push (per-device opt-in) =====================
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS masquerades as macOS
+const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+// what THIS device says — multi-device truth is per-device by construction
+async function pushDeviceState() {
+  // order is load-bearing: an iOS Safari tab exposes no PushManager at all,
+  // so the capability check alone would mislabel it "unsupported"
+  if (isIOS && !isInstalled()) return 'ios-install';
+  if (!pushSupported()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = reg && (await reg.pushManager.getSubscription());
+  if (sub) {
+    reassertPushBinding(); // self-heal in the background; UI shows local truth
+    return 'on';
+  }
+  return 'off';
+}
+
+// a subscription minted under a previous VAPID key can never deliver again
+// (every send 403s and the server prunes the row). Compare the key this sub
+// was minted with against the server's current one; browsers that don't
+// expose options.applicationServerKey can't tell — assume it matches.
+function subKeyMismatch(sub, serverKey) {
+  const cur = sub.options && sub.options.applicationServerKey;
+  if (!cur || !serverKey) return false;
+  const b = new Uint8Array(cur);
+  let s = '';
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  const minted = btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return minted !== serverKey.replace(/=+$/, '');
+}
+
+// THE rebind path: re-assert this device's subscription so 410-prunes, backup
+// restores, and login switches follow the CURRENT login — called on every
+// authenticated boot, not just Account-modal opens, so a shared iPad can't
+// keep delivering the previous user's pushes. Also the rotation repair: if
+// the server's VAPID key changed, the old sub is dead weight — re-mint it
+// (permission is already granted, so subscribe() needs no user gesture).
+async function reassertPushBinding() {
+  try {
+    if (!pushSupported() || Notification.permission !== 'granted') return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    let sub = reg && (await reg.pushManager.getSubscription());
+    if (!sub) return;
+    const { key } = await api('/push/public-key');
+    if (!key) return; // server has no usable keys — nothing to bind to
+    if (subKeyMismatch(sub, key)) {
+      await sub.unsubscribe();
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+    }
+    await api('/push/subscribe', { method: 'POST', body: sub.toJSON() });
+  } catch {
+    /* best-effort — the Account modal re-probes on every open */
+  }
+}
+
+// logout's half of the rebind contract: unbind this device server-side while
+// the session can still authorize it. The browser subscription stays minted —
+// the next login's boot re-assert rebinds it to whoever signs in.
+async function unbindPushOnLogout() {
+  try {
+    if (!pushSupported()) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && (await reg.pushManager.getSubscription());
+    if (sub) await api('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } });
+  } catch {
+    /* best-effort: the 410-prune and next login's rebind are the backstops */
+  }
+}
+
+// navigator.serviceWorker.ready never rejects — race a timeout so a botched
+// deploy can't turn the enable button into an infinite spinner
+const swReady = (ms = 10000) =>
+  Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Service worker never became ready')), ms)),
+  ]);
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function enablePush() {
+  // ORDER IS LOAD-BEARING: requestPermission must be the FIRST await in the
+  // tap's task — on iOS any await before it voids the user gesture
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    if (perm === 'default') toast('No problem — you can turn these on anytime');
+    return;
+  }
+  const reg = await swReady();
+  const { key } = await api('/push/public-key');
+  if (!key) throw new Error("Push isn't set up on this server yet");
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && subKeyMismatch(sub, key)) {
+    await sub.unsubscribe(); // minted under a rotated VAPID key — dead, re-mint
+    sub = null;
+  }
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+  }
+  await api('/push/subscribe', { method: 'POST', body: sub.toJSON() });
+  toast('Notifications on for this device');
+}
+
+async function disablePush() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = reg && (await reg.pushManager.getSubscription());
+  if (!sub) return;
+  const endpoint = sub.endpoint; // capture BEFORE unsubscribe
+  await sub.unsubscribe(); // local truth changes first; UI follows local truth
+  api('/push/unsubscribe', { method: 'POST', body: { endpoint } }).catch(() => {}); // best-effort; the 410-prune is the backstop
+  toast('Notifications off for this device');
+}
+
+async function renderPushSection() {
+  const el = $('#push-section');
+  if (!el) return;
+  const mode = await pushDeviceState();
+  if (!document.contains(el)) return; // modal closed mid-probe
+  const blurb = `<div class="r-meta">A ping when someone asks to borrow a game, a game night gets posted, or a live game starts. Never for things your own household did. Each phone or browser opts in separately.</div>`;
+  if (mode === 'ios-install') {
+    let dismissed = false;
+    try { dismissed = localStorage.getItem('ms-install-hint') === 'done'; } catch { /* lockdown mode */ }
+    el.innerHTML = blurb + (dismissed
+      ? `<div class="r-meta" style="margin-top:8px">${icon('alert')} On iPhone and iPad, notifications only work once the app is on your home screen (Share → Add to Home Screen).</div>`
+      : `<div class="result-row" id="ios-install-hint" style="margin-top:8px">
+          <div class="r-grow">
+            <div class="r-title">Get game-night pings on this iPhone</div>
+            <div class="r-meta">Notifications need the app on your Home Screen first: in Safari tap <strong>Share</strong> (the square with the up-arrow), choose <strong>Add to Home Screen</strong>, then open Meeple Shelf from your home screen and come back here.</div>
+          </div>
+          <button class="btn btn-sm" id="ios-hint-dismiss" style="flex:none;white-space:nowrap">Got it</button>
+        </div>`);
+    const d = $('#ios-hint-dismiss');
+    if (d) d.onclick = () => {
+      try { localStorage.setItem('ms-install-hint', 'done'); } catch { /* won't persist */ }
+      $('#ios-install-hint')?.remove();
+    };
+    return;
+  }
+  if (mode === 'unsupported') {
+    el.innerHTML = `<div class="r-meta">This browser can't do push notifications.</div>`;
+    return;
+  }
+  if (mode === 'denied') {
+    el.innerHTML = blurb + `<div class="r-meta" style="margin-top:8px">${icon('alert')} Notifications are blocked for Meeple Shelf on this device. ${isIOS ? 'Allow them in <strong>Settings → Notifications → Meeple Shelf</strong>' : 'Allow them in your browser’s site settings (tap the icon beside the address bar)'} and reopen this screen.</div>`;
+    return;
+  }
+  if (mode === 'on') {
+    el.innerHTML = blurb + `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+      <span class="badge req-approved">${icon('check')} On for this device</span>
+      <button class="btn btn-sm" id="push-test">Send a test</button>
+      <button class="btn btn-sm" id="push-off">Turn off</button>
+    </div>`;
+  } else {
+    el.innerHTML = blurb + `<button class="btn btn-primary" id="push-on" style="margin-top:8px">${icon('bell')} Turn on notifications</button>`;
+  }
+  const wire = (id, fn) => {
+    const btn = $(id);
+    if (!btn) return;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await fn();
+      } catch (err) {
+        toast(err.message);
+      }
+      renderPushSection(); // re-derive whatever state we landed in
+    };
+  };
+  wire('#push-on', enablePush);
+  wire('#push-off', disablePush);
+  wire('#push-test', async () => {
+    const r = await api('/push/test', { method: 'POST' });
+    toast(r.enabled ? 'Test sent — it may take a few seconds' : 'Logged (server has no push keys)');
+  });
 }
 
 async function openAccountModal() {
@@ -431,6 +628,9 @@ async function openAccountModal() {
       </div>
       <div id="rc-result"></div>` : ''}
 
+      <h3 class="acct-h">${icon('bell')} Notifications</h3>
+      <div id="push-section"><div class="r-meta">Checking this device…</div></div>
+
       <h3 class="acct-h">Change password</h3>
       <label>Current password</label>
       <input type="password" id="p-current" autocomplete="current-password">
@@ -441,6 +641,8 @@ async function openAccountModal() {
       <hr style="border:none;border-top:1px solid var(--line);margin:20px 0">
       <button class="btn" id="p-logout">Log out</button>
     </div>`);
+
+  renderPushSection(); // async — fills #push-section when device state resolves
 
   // household people: mutations mark the page dirty so the crew payload (and
   // the play pickers) refetch on close. A busy flag blocks double submits,
@@ -589,6 +791,7 @@ async function openAccountModal() {
     };
   }
   $('#p-logout').onclick = async () => {
+    await unbindPushOnLogout(); // while the session can still authorize it
     await api('/logout', { method: 'POST' });
     state.user = null;
     closeModal();
@@ -1255,8 +1458,15 @@ async function viewCrews() {
 const filtersOpenDefault = !window.matchMedia('(max-width: 640px)').matches;
 const crewState = { id: null, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', statsGrain: 'household', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false };
 
-async function viewCrewDetail(id) {
+async function viewCrewDetail(id, sub) {
   if (crewState.id !== id) Object.assign(crewState, { id, q: '', players: 'any', time: 'any', owner: 'all', category: 'all', tag: 'all', sort: 'title', view: 'grid', statsGrain: 'household', expanded: new Set(), filtersOpen: filtersOpenDefault, neverPlayed: false });
+  if (sub === 'nights') {
+    // /#/crew/<id>/nights deep link — one-shot: drop the sub from the URL so
+    // later route() calls (modal closes, reloads) can't stomp an in-app view
+    // switch back to nights. replaceState fires no hashchange, so no re-route.
+    crewState.view = 'nights';
+    history.replaceState(null, '', `#/crew/${id}`);
+  }
   const [{ crew, members, games }, { livePlays: livePlaysInit }] = await Promise.all([
     api('/crews/' + id),
     api(`/crews/${id}/live-plays`).catch(() => ({ livePlays: [] })),
@@ -3392,14 +3602,52 @@ async function viewPublicShelf(slug) {
 // ===================== boot =====================
 
 (async function boot() {
+  // ---- service worker FIRST, before any await: a notification tap delivers
+  // its deep link via postMessage, and DOMContentLoaded (which ends the client
+  // message queue's buffering) fires the moment boot suspends at /me — a
+  // listener attached after that await drops taps that land mid-boot or on
+  // the offline screen ----
+  let booted = false;
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* private mode — app works fine without it */ });
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const url = e.data && e.data.kind === 'open' && typeof e.data.url === 'string' ? e.data.url : null;
+      if (!url) return;
+      const target = new URL(url, location.origin);
+      if (target.origin !== location.origin) return; // belt-and-braces with the SW-side whitelist
+      if (!booted) {
+        // mid-boot or stranded on the offline screen: stamp the deep link
+        // into the URL and cold-boot into it (the tap proves we're online)
+        history.replaceState(null, '', target.href);
+        location.reload();
+        return;
+      }
+      const newHash = target.hash || '#/library';
+      if (location.hash === newHash) route(); // same hash → no hashchange fires → refresh manually
+      // replace, not assign: the #/account alias rewrites its entry to
+      // #/library, and a pushed duplicate would make Back a visible no-op
+      else location.replace(target.href);
+    });
+  }
   try {
     const me = await api('/me');
     state.user = me.user;
     state.pending = me.pendingRequests || 0;
-  } catch {
+  } catch (err) {
     state.user = null;
+    // no .status = network-level failure (offline PWA launch), NOT logged-out:
+    // GET /me answers 200 even anonymously, so showing the login form would lie
+    if (!err.status) {
+      appEl.innerHTML = `<div class="container">${emptyState('ghost', "You're offline", 'Meeple Shelf needs a connection to see the shelves.', '<button class="btn btn-primary" onclick="location.reload()">Try again</button>')}</div>`;
+      window.addEventListener('online', () => location.reload(), { once: true }); // self-heal the moment connectivity returns
+      return;
+    }
   }
   window.addEventListener('hashchange', route);
   if (!location.hash) location.hash = state.user ? '#/library' : '#/welcome';
   else route();
+  booted = true;
+  // pushes follow the CURRENT login from first paint — not from whenever the
+  // Account modal next gets opened (shared-iPad rebind + VAPID-rotation repair)
+  if (state.user) reassertPushBinding();
 })();

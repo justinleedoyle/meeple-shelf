@@ -1,0 +1,35 @@
+# Day-of game-night reminder: every morning, curl the app's cron endpoint.
+# The plain HTTPS request wakes the auto-stopped Fly machine (auto_start), so
+# no flyctl machinery is needed here — that stays nightly.yml's department.
+#
+# Timing: GH cron is UTC year-round → 16:30 UTC ≈ 9:30am PDT / 8:30am PST.
+# The endpoint computes "today" in America/Los_Angeles, so a manual
+# workflow_dispatch is safe at ANY hour — it can never remind a day early.
+#
+# Public repo gotcha: GitHub disables schedules after 60 days without repo
+# activity. nightly.yml's "Keep schedules alive" step resets that clock daily;
+# if reminders ever silently stop, check the Actions tab for a disabled banner.
+#
+# Secret: CRON_SECRET — same value as the Fly secret of the same name.
+
+name: Game night reminders
+
+on:
+  schedule:
+    - cron: '30 16 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nudge today's game nights
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS --retry 5 --retry-all-errors --max-time 30 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://meeple-shelf.fly.dev/api/cron/remind
