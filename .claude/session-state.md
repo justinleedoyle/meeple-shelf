@@ -1,14 +1,15 @@
 # Session State — Meeple Shelf
 
 ## Active
-(none — push/PWA shipped 2026-06-12; remaining backlog needs external inputs, see below)
+(none — player profiles shipped 2026-06-12; remaining backlog needs external inputs, see below)
 
 ## Paused / Recently Completed
-- [2026-06-10 Meeple Shelf one-shot build → production](sessions/2026-06-10-meeple-shelf-build.md) — Complete (21 phases).
-  Live app: https://meeple-shelf.fly.dev (Fly.io machine v20, 6 households, 158 games, full art).
+- [2026-06-10 Meeple Shelf one-shot build → production](sessions/2026-06-10-meeple-shelf-build.md) — Complete (22 phases).
+  Live app: https://meeple-shelf.fly.dev (Fly.io machine v21, 6 households, 158 games, full art).
   Public read-only page: https://justinleedoyle.github.io/meeple-shelf/ (auto-publishes via Actions).
   Shipped: library/shelves/sharing, crews + combined library, leaderboard (Households|Players
-  grains), game nights (RSVP+votes+day-of push reminder), live play mode, plays with expansions/
+  grains), **player profiles** (tap a Players row → per-game records + head-to-head), game
+  nights (RSVP+votes+day-of push reminder), live play mode, plays with expansions/
   durations/co-op, loans + borrow requests, wishlists, tags, activity feed, people-within-
   households, **web push notifications + installable PWA** (per-device opt-in, offline shell),
   nightly encrypted backups + page auto-refresh + 60-day schedule keepalive.
@@ -28,4 +29,4 @@
 - Photos on plays → needs object storage (Tigris/S3)
 
 ## Fast-follow candidates
-- Player profiles: tap a Players-board row → per-game records, head-to-head vs siblings
+- (none queued — player profiles shipped in Phase 22)

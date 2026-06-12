@@ -469,3 +469,46 @@ Nothing — feature-complete as scoped.
 - HANDED TO JUSTIN: real-device test — iPhone → meeple-shelf.fly.dev →
   Share → Add to Home Screen → open from home screen → Account →
   Turn on notifications → Send a test.
+
+## Phase 22: PLAYER PROFILES — tap a Players-board row. DEPLOYED (machine v21)
+- Process: 4-agent spec fleet (542k tokens; server agent pinned every query to
+  the board's SQL; tests agent shipped a divergence ledger that made the
+  reconciliation of the three sibling specs a 5-minute job) → serial
+  implementation → 47-test suite → full gate 450 green → 4-lens review
+  (only 4 findings, all client-side — the SQL/security lenses came back
+  empty) → fixes → browser re-verify → deploy → read-only prod smoke.
+- Server: GET /api/crews/:id/players/:personId/stats. THE design rule:
+  every number is the playerStandings query pinned to one person — gate =
+  roster predicate (current-member household + >=1 tagged play, retired
+  included; person_id=0/departed/zero-play/unknown = one uniform 404, no
+  existence oracle). Totals/hIndex/nemesis (board CTE with loser pinned,
+  same last_loss tie-break), per-game (score_dir-aware best, own rows only),
+  head-to-head (co-seated person>0 units from current households; NO
+  coop_result filter — co-op forces identical won flags so pairs can't
+  decide, emergently matching the board), recents = playsFor(crew, 10,
+  null, personId) — optional 4th param, `(? IS NULL OR EXISTS...)`, all
+  existing call sites untouched.
+- Client: players-grain rows data-pp + tabindex + title (NO role=button —
+  review caught that children-presentational + aria-label override would
+  strip the standings numbers from the accessibility tree); delegated
+  click/Enter/Space inside paint() (fresh elements each paint = listeners
+  can't stack); openPlayerProfileModal seeds header+totals from the tapped
+  row (zero-latency paint), one fetch fills per-game table / H2H rows
+  (W–L + shared plays) / recents (unit's own seat outcome via
+  p.players.find(person.id)); modalDirty never set → close keeps board+grain.
+- Review fixes: role/aria-label dropped; Safari focus ring via inset cell
+  box-shadow (WebKit won't paint tr outlines); #pp-body .r-meta scoped rule
+  (global one is .result-row-scoped and missed the retired/empty-H2H lines).
+- Tests: /tmp/player-profile-test.mjs on :3795 — reconciliation sweep
+  (every board row's profile equals it digit-for-digit), H2H mirror sweep
+  (wins(A,B)===losses(B,A)), retirement immutability, departure 404 +
+  history-stands, delete-play recompute, stats-payload canary. One spec
+  expectation was wrong (A-household sits in all 11 fixture plays, not 9)
+  — fixed in the test, not the code. run-gate.sh now includes the suite
+  and pins live-play's hardcoded /tmp/live-test.db.
+- Prod smoke (read-only, zero residue): profile 404 gate, stats keys
+  intact, 401 unauthenticated, logout. Prod still intentionally 0 plays.
+- Dev-DB note: first browser-verify seeding cleanup used a date filter and
+  caught a pre-existing dev play (id 2) — dev sandbox only, no impact;
+  later passes captured created ids and tore down exactly (incl.
+  retire→un-retire of Sara person 2).
