@@ -403,3 +403,69 @@ Nothing — feature-complete as scoped.
 - Prod: stats parity byte-identical pre/post rebuild; person lifecycle smoke
   (create→tag→Players grain live→delete→zero residue); backups:
   backup-pre-people.db on volume + local (158 games, play_players intact).
+
+## Phase 21: WEB PUSH + INSTALLABLE PWA. DEPLOYED (machine v20)
+- Process: 4-agent spec fleet (server core / triggers / SW+client /
+  installability) → serial implementation → 65-test push suite (two servers:
+  dev with CRON_SECRET, prod-mode for gating) → 4-lens adversarial review
+  (25 findings: 4 major, 14 minor, 7 nit — ALL fixed) → 403 tests green
+  across 11 suites → prod backup → deploy → smokes → remind.yml dispatch.
+- Schema: push_subscriptions (endpoint UNIQUE, fail_count, CASCADE) +
+  events.reminded_at. web-push@3.6.7 = first new runtime dep (0 vulns).
+- Server core: PUSH_ENABLED env gate; notifyLog ring buffer = keyless test
+  seam (GET/DELETE /api/push/_log, !PROD only); sendPushToUsers returns the
+  delivery promise (handlers fire-and-forget, cron AWAITS — auto-stop machine
+  can't kill in-flight reminder sends); per-status prune 404/410/401/403 +
+  8-strike zombie delete; public-key gated by PUSH_ENABLED (half-configured
+  server reads as "off", not a lying "On" badge); unsubscribe user-scoped;
+  subscribe keeps the ON CONFLICT(endpoint) rebind (shared-device contract).
+- Triggers (always after txn commit, actor's household excluded): borrow ask
+  (collapse tag borrow-from-<requester>, count in body); borrow answer
+  (per-REQUEST tag — owner clearing a queue can't overwrite the unread yes
+  with the no; auto-declined rivals get the same decline push a manual no
+  sends); event create (date rides the BODY — 60-char title + ' — ' would
+  clip it; past-dated backfills silent); cancel/un-cancel/RESCHEDULE
+  transitions push (reschedule was the silent-strand case: the un-tapped
+  creation banner still shows the old date), title/time/notes churn silent;
+  live start excludes starter + roster + HOST + event-'in' RSVPs (the room,
+  not just the table). Milestones/RSVPs/edits stay silent (noise budget).
+- Cron: /api/cron/remind — sha256-then-timingSafeEqual bearer; "today" in
+  America/Los_Angeles (a 6pm-PT manual dispatch is UTC-tomorrow — was a
+  day-early push PLUS a burned reminder); mark reminded_at BEFORE send
+  (at-most-once); date-change resets reminded_at. remind.yml curls 16:30 UTC;
+  nightly.yml got a keepalive step (PUT workflows/enable resets GitHub's
+  60-day public-repo schedule auto-disable for BOTH workflows).
+- sw.js: network-first navigations + 4-file shell, /api/* never touched,
+  inline offline page, no skipWaiting + clients.claim; push ALWAYS shows
+  (iOS revokes after ~3 silent); renotify:!!d.tag (tag re-use here IS a state
+  change — renotify:false made the day-of reminder replace the creation
+  banner with NO sound for exactly the people who hadn't tapped it); badge
+  dropped (Android cuts glyph from alpha; ours is opaque → blob); url
+  whitelist regex; notificationclick focus+postMessage else openWindow.
+- Client: pushDeviceState 5 states (ios-install hint w/ localStorage dismiss,
+  unsupported, denied, on, off); enablePush = requestPermission FIRST await
+  (iOS gesture); reassertPushBinding() on EVERY authed boot (shared-iPad
+  rebind — Account-modal-only rebind let the last opener steal the device) +
+  VAPID-rotation repair (compare sub.options.applicationServerKey to server
+  key; mismatch → unsubscribe + re-mint — otherwise dead row resurrects
+  forever while UI says On); unbindPushOnLogout() in both logout paths;
+  boot(): SW message listener ABOVE first await, un-booted taps replaceState
+  + reload (offline-screen recovery), online→reload self-heal, message nav
+  via location.replace (no dead Back press), one-shot /nights deep link
+  (replaceState strips sub so modal-close re-routes can't stomp view
+  switches — the live-finish→leaderboard jump survives).
+- PWA: manifest id/scope, 192 + 512 + maskable + svg icons (180 stays for
+  apple-touch-icon); safe-area env() padding incl. the mobile #nav companion
+  rule (id selector beats element rules inside @media too).
+- Ship: prod backup verified (quick_check ok, 6 users/158 games) →
+  deploy applied staged VAPID + CRON_SECRET (same value in GH secret) →
+  smokes: public-key serves real key, sw.js application/javascript,
+  manifest+icon 200, cron 401 on bad bearer; zero-residue prod smoke
+  (push/test enabled:true, subscribe→unsubscribe round-trip, logout);
+  remind.yml workflow_dispatch end-to-end: {ok,eventsToday:0,notified:0}.
+- Env note: node_modules vanished between sessions — npm ci restored from
+  the committed lock (web-push included). Test DB paths: live-play suite
+  hardcodes /tmp/live-test.db (gate scripts must match it).
+- HANDED TO JUSTIN: real-device test — iPhone → meeple-shelf.fly.dev →
+  Share → Add to Home Screen → open from home screen → Account →
+  Turn on notifications → Send a test.
